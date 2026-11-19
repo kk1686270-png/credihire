@@ -1,0 +1,12 @@
+.env
+.env.local
+.venv/
+.pip-tmp/
+.uv-cache/
+pip-install.out
+pip-install.err
+__pycache__/
+*.py[cod]
+.pytest_cache/
+node_modules/
+dist/

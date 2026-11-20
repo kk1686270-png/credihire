@@ -14,7 +14,7 @@ import {
   FileQuestion
 } from 'lucide-react';
 
-export function UrlCredibilityCard({ result }) {
+export function UrlCredibilityCard({ result, isScoreHidden = false, onOpenAuth }) {
   if (!result || !result.isUrlAnalysis) return null;
 
   const {
@@ -58,16 +58,33 @@ export function UrlCredibilityCard({ result }) {
               <Globe size={13} className="me-1" />
               Website Credibility Report
             </span>
-            <span
-              className="badge px-2 py-1"
-              style={{
-                backgroundColor: `${riskColor}22`,
-                color: riskColor,
-                border: `1px solid ${riskColor}44`
-              }}
-            >
-              {riskLevel ? riskLevel.toUpperCase() : 'UNKNOWN'} RISK ({riskScore}/100)
-            </span>
+            {isScoreHidden ? (
+              <button
+                type="button"
+                className="badge px-2 py-1 border-0 d-inline-flex align-items-center gap-1"
+                style={{
+                  backgroundColor: 'rgba(245, 158, 11, 0.2)',
+                  color: '#FFB547',
+                  border: '1px solid rgba(245, 158, 11, 0.4)',
+                  cursor: 'pointer'
+                }}
+                onClick={() => onOpenAuth && onOpenAuth('signin')}
+                title="Please signin/signup to view score"
+              >
+                <Lock size={11} /> SCORE HIDDEN (SIGN IN)
+              </button>
+            ) : (
+              <span
+                className="badge px-2 py-1"
+                style={{
+                  backgroundColor: `${riskColor}22`,
+                  color: riskColor,
+                  border: `1px solid ${riskColor}44`
+                }}
+              >
+                {riskLevel ? riskLevel.toUpperCase() : 'UNKNOWN'} RISK ({riskScore}/100)
+              </span>
+            )}
           </div>
 
           <div className="d-flex align-items-center gap-2 text-white-50" style={{ fontSize: '0.78rem' }}>

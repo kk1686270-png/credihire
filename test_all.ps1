@@ -45,7 +45,7 @@ Write-Host "==================================================" -ForegroundColor
 Write-Host "1. Engine-Rules:       " -NoNewline; if ($engineExit -eq 0) { Write-Host "PASSED (180 tests)" -ForegroundColor Green } else { Write-Host "FAILED" -ForegroundColor Red }
 Write-Host "2. API-AI:             " -NoNewline; if ($aiExit -eq 0) { Write-Host "PASSED (82 tests)" -ForegroundColor Green } else { Write-Host "FAILED" -ForegroundColor Red }
 Write-Host "3. Backend CrediHire:  " -NoNewline; if ($backendExit -eq 0) { Write-Host "PASSED (121 tests)" -ForegroundColor Green } else { Write-Host "FAILED" -ForegroundColor Red }
-Write-Host "4. Frontend:           " -NoNewline; if ($frontendExit -eq 0) { Write-Host "PASSED (30 tests)" -ForegroundColor Green } else { Write-Host "FAILED" -ForegroundColor Red }
+Write-Host "4. Frontend:           " -NoNewline; if ($frontendExit -eq 0) { Write-Host "PASSED (34 tests)" -ForegroundColor Green } else { Write-Host "FAILED" -ForegroundColor Red }
 Write-Host "5. Browser Extension:  " -NoNewline; if ($extensionExit -eq 0) { Write-Host "PASSED (32 tests)" -ForegroundColor Green } else { Write-Host "FAILED" -ForegroundColor Red }
 Write-Host "==================================================" -ForegroundColor Cyan
 

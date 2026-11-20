@@ -10,7 +10,9 @@ export function ResultsPanel({
   result,
   onResetToDemo,
   onOpenRecoveryGuide,
-  onSelectWarning
+  onSelectWarning,
+  isScoreHidden = false,
+  onOpenAuth
 }) {
   const [copied, setCopied] = React.useState(false);
 
@@ -36,18 +38,20 @@ export function ResultsPanel({
   const handleCopySummary = () => {
     let summaryText = '';
     if (result.isUrlAnalysis) {
+      const scoreDisplay = isScoreHidden ? 'Score: Hidden (Sign-in Required)' : `${result.riskLevel ? result.riskLevel.toUpperCase() : 'UNKNOWN'} (${result.riskScore}/100)`;
       summaryText = `CrediHire URL Credibility Report:
 Target URL: ${result.targetUrl}
 Final Destination: ${result.finalUrl}
-Risk Level: ${result.riskLevel ? result.riskLevel.toUpperCase() : 'UNKNOWN'} (${result.riskScore}/100)
+Risk Level: ${scoreDisplay}
 Assessment: ${result.summary}
 Indicators:
 ${result.indicators?.map(i => `- [${i.severity.toUpperCase()}] ${i.code}: ${i.message}`).join('\n') || 'None'}
 Recommendations:
 ${result.recommendations?.map((r, idx) => `${idx + 1}. ${r}`).join('\n') || 'None'}`;
     } else {
+      const scoreDisplay = isScoreHidden ? 'Score: Hidden (Sign-in Required)' : `(${result.riskScore}/100)`;
       summaryText = `CrediHire Analysis Report:
-Status: ${result.headline} (${result.riskScore}/100)
+Status: ${result.headline} ${scoreDisplay}
 Assessment: ${result.summary}
 Warning Signs:
 ${result.warningSigns?.map(w => `- ${w.title}: ${w.explanation}`).join('\n')}
@@ -115,7 +119,11 @@ ${result.recommendations?.map(r => `${r.step || ''}. ${r.title}: ${r.description
 
         {/* Content View: URL Analysis or 3-Column Offer Message Grid */}
         {result.isUrlAnalysis ? (
-          <UrlCredibilityCard result={result} />
+          <UrlCredibilityCard 
+            result={result} 
+            isScoreHidden={isScoreHidden} 
+            onOpenAuth={onOpenAuth} 
+          />
         ) : (
           <div className="results-grid">
             {/* Column 1: Submitted Content */}
@@ -133,6 +141,8 @@ ${result.recommendations?.map(r => `${r.step || ''}. ${r.title}: ${r.description
                 riskLevel={result.riskLevel}
                 headline={result.headline}
                 summary={result.summary}
+                isScoreHidden={isScoreHidden}
+                onOpenAuth={onOpenAuth}
               />
 
               <WarningSigns

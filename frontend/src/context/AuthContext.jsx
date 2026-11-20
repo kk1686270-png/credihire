@@ -95,9 +95,10 @@ export function AuthProvider({ children }) {
     }
   }, [user]);
 
-  const showToast = (msg) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
+  const showToast = (msg, type = 'info') => {
+    const payload = typeof msg === 'string' ? { message: msg, type } : msg;
+    setToastMessage(payload);
+    setTimeout(() => setToastMessage(null), 4500);
   };
 
   const login = async (email, password) => {
@@ -232,6 +233,7 @@ export function AuthProvider({ children }) {
       logout, 
       loginWithDemo, 
       toastMessage,
+      showToast,
       history,
       addScanToHistory,
       deleteHistoryItem,

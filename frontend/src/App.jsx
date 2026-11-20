@@ -12,7 +12,7 @@ import { AuthModal } from './components/AuthModal';
 import { HistoryModal } from './components/HistoryModal';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
 import { useAnalysis } from './hooks/useAnalysis';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, AlertTriangle } from 'lucide-react';
 import { Chatbot } from './components/Chatbot';
 import { ExtensionGuide } from './components/ExtensionGuide';
 
@@ -27,7 +27,7 @@ function AppContent() {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isExtensionGuideOpen, setIsExtensionGuideOpen] = useState(false);
 
-  const { user, toastMessage, addScanToHistory } = useAuth();
+  const { user, toastMessage, showToast, addScanToHistory } = useAuth();
 
   const {
     result,
@@ -103,6 +103,9 @@ function AppContent() {
   const handleAnalyze = async (overrideData) => {
     const text = overrideData?.text !== undefined ? overrideData.text : inputText;
     const file = overrideData?.file !== undefined ? overrideData.file : attachedFile;
+    if (!user) {
+      showToast("Please signin/signup", "warning");
+    }
     const scanData = await analyze(text, file);
     if (scanData && user) {
       addScanToHistory(scanData);
@@ -112,6 +115,9 @@ function AppContent() {
   // Perform website URL analysis and auto-save to user history if logged in
   const handleAnalyzeUrl = async (overrideUrl) => {
     const target = overrideUrl !== undefined ? overrideUrl : urlInput;
+    if (!user) {
+      showToast("Please signin/signup", "warning");
+    }
     const scanData = await analyzeUrl(target);
     if (scanData && user) {
       addScanToHistory(scanData);
@@ -120,6 +126,9 @@ function AppContent() {
 
   const handleLoadPreset = async (preset) => {
     setAttachedFile(null);
+    if (!user) {
+      showToast("Please signin/signup", "warning");
+    }
     const scanData = await loadPreset(preset);
     if (scanData && user) {
       addScanToHistory(scanData);
@@ -127,6 +136,9 @@ function AppContent() {
   };
 
   const handleLoadUrlPreset = async (preset) => {
+    if (!user) {
+      showToast("Please signin/signup", "warning");
+    }
     const scanData = await loadUrlPreset(preset);
     if (scanData && user) {
       addScanToHistory(scanData);
@@ -263,6 +275,8 @@ function AppContent() {
           onResetToDemo={resetToDemo}
           onOpenRecoveryGuide={() => setIsRecoveryOpen(true)}
           onSelectWarning={(warning) => setSelectedWarning(warning)}
+          isScoreHidden={!user && !result?.isDemo}
+          onOpenAuth={handleOpenAuth}
         />
       </main>
 
@@ -316,9 +330,28 @@ function AppContent() {
 
       {/* Floating Toast Notification */}
       {toastMessage && (
-        <div className="auth-toast-banner" role="status">
-          <Sparkles size={16} className="text-warning" />
-          <span>{toastMessage}</span>
+        <div 
+          className={`auth-toast-banner ${typeof toastMessage === 'object' && toastMessage.type === 'warning' ? 'auth-toast-warning' : ''}`} 
+          role="status"
+        >
+          {typeof toastMessage === 'object' && toastMessage.type === 'warning' ? (
+            <AlertTriangle size={18} className="toast-warning-icon text-warning flex-shrink-0" />
+          ) : (
+            <Sparkles size={16} className="text-warning flex-shrink-0" />
+          )}
+          <span className="toast-message-text">
+            {typeof toastMessage === 'string' ? toastMessage : toastMessage.message}
+          </span>
+          {typeof toastMessage === 'object' && toastMessage.type === 'warning' && (
+            <button
+              type="button"
+              className="btn btn-sm btn-warning py-0 px-2 ms-2 fw-semibold flex-shrink-0"
+              style={{ fontSize: '0.78rem', borderRadius: '4px' }}
+              onClick={() => handleOpenAuth('signin')}
+            >
+              Sign In / Sign Up
+            </button>
+          )}
         </div>
       )}
     </div>

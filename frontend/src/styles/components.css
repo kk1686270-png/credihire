@@ -628,6 +628,22 @@
   margin-top: 2px;
 }
 
+.risk-circle-text.score-locked {
+  pointer-events: auto;
+}
+
+.score-locked-tag {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #FFB547;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: rgba(255, 181, 71, 0.15);
+  border: 1px solid rgba(255, 181, 71, 0.3);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
 .risk-text-status {
   display: flex;
   flex-direction: column;
@@ -1311,6 +1327,23 @@
   gap: 10px;
   z-index: 3000;
   animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.auth-toast-banner.auth-toast-warning {
+  background: #171105;
+  border: 1.5px solid #f59e0b;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7), 0 0 24px rgba(245, 158, 11, 0.35);
+  color: #fffbeb;
+}
+
+.auth-toast-banner .toast-warning-icon {
+  color: #f59e0b;
+  animation: pulseToastWarning 1.6s infinite ease-in-out;
+}
+
+@keyframes pulseToastWarning {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.15); }
 }
 
 @keyframes slideUp {

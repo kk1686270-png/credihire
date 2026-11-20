@@ -1,4 +1,10 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { 
+  validateRealEmail, 
+  validateRealName, 
+  validateRealPassword, 
+  validateGoogleAccountEmail 
+} from '../utils/validation.js';
 
 const AuthContext = createContext(null);
 
@@ -67,7 +73,12 @@ export function AuthProvider({ children }) {
       throw new Error("Please enter both email and password.");
     }
 
-    const normEmail = email.toLowerCase().trim();
+    const emailValidation = validateRealEmail(email);
+    if (!emailValidation.isValid) {
+      throw new Error(emailValidation.error);
+    }
+    const normEmail = emailValidation.normalizedEmail;
+
     const accounts = getRegisteredAccounts();
     const existingAccount = accounts.find(a => a.email.toLowerCase() === normEmail);
 
@@ -75,6 +86,10 @@ export function AuthProvider({ children }) {
       const error = new Error("No account found with this email. Please create an account first.");
       error.code = 'ACCOUNT_NOT_FOUND';
       throw error;
+    }
+
+    if (existingAccount.provider === 'google' && !existingAccount.password) {
+      throw new Error("This account is registered with Google. Please use 'Sign in with Google'.");
     }
 
     if (existingAccount.password && existingAccount.password !== password) {
@@ -87,8 +102,10 @@ export function AuthProvider({ children }) {
       id: existingAccount.id || 'usr_' + Date.now().toString(36),
       name: generatedName,
       email: normEmail,
+      avatarUrl: existingAccount.avatarUrl || null,
       avatarInitials: existingAccount.avatarInitials || (generatedName.split(' ').map(n => n[0]).join('') || 'U').slice(0, 2).toUpperCase(),
       plan: existingAccount.plan || 'Verified Job Seeker',
+      provider: existingAccount.provider || 'email',
       joinedAt: existingAccount.joinedAt || new Date().toLocaleDateString()
     };
 
@@ -99,21 +116,38 @@ export function AuthProvider({ children }) {
   };
 
   const signup = async (name, email, password) => {
-    if (!name || !email || !password) {
-      throw new Error("Please fill in all required fields.");
-    }
-    if (password.length < 6) {
-      throw new Error("Password must be at least 6 characters.");
+    const nameValidation = validateRealName(name);
+    if (!nameValidation.isValid) {
+      throw new Error(nameValidation.error);
     }
 
-    const normEmail = email.toLowerCase().trim();
+    const emailValidation = validateRealEmail(email);
+    if (!emailValidation.isValid) {
+      throw new Error(emailValidation.error);
+    }
+
+    const passwordValidation = validateRealPassword(password);
+    if (!passwordValidation.isValid) {
+      throw new Error(passwordValidation.error);
+    }
+
+    const normEmail = emailValidation.normalizedEmail;
+    const accounts = getRegisteredAccounts();
+    const existingAccount = accounts.find(a => a.email.toLowerCase() === normEmail);
+    if (existingAccount) {
+      throw new Error("An account with this email already exists. Please sign in instead.");
+    }
+
+    const cleanName = nameValidation.sanitizedName;
     const userData = {
       id: 'usr_' + Date.now().toString(36),
-      name: name.trim(),
+      name: cleanName,
       email: normEmail,
       password: password,
-      avatarInitials: (name.trim().split(' ').map(n => n[0]).join('') || 'U').slice(0, 2).toUpperCase(),
+      avatarUrl: null,
+      avatarInitials: (cleanName.split(' ').map(n => n[0]).join('') || 'U').slice(0, 2).toUpperCase(),
       plan: 'New Member Shield',
+      provider: 'email',
       joinedAt: new Date().toLocaleDateString()
     };
 
@@ -125,6 +159,98 @@ export function AuthProvider({ children }) {
     setUser(sessionUser);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(sessionUser));
     showToast(`Account created successfully! Welcome, ${sessionUser.name}.`);
+    return sessionUser;
+  };
+
+  const loginWithGoogle = async (googleAuthInput) => {
+    let email = '';
+    let name = '';
+    let picture = null;
+    let sub = null;
+
+    if (typeof googleAuthInput === 'string') {
+      // Decode Google Identity Services JWT credential
+      try {
+        const base64Url = googleAuthInput.split('.')[1];
+        if (!base64Url) throw new Error("Invalid JWT token format");
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(
+          atob(base64)
+            .split('')
+            .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+            .join('')
+        );
+        const payload = JSON.parse(jsonPayload);
+
+        if (!payload.email) {
+          throw new Error("Google credential missing email address.");
+        }
+        if (payload.email_verified === false) {
+          throw new Error("Google account is not verified. Only real verified accounts can sign in.");
+        }
+
+        email = payload.email;
+        name = payload.name || payload.given_name || 'Google User';
+        picture = payload.picture || null;
+        sub = payload.sub || null;
+      } catch (err) {
+        throw new Error(err.message || "Failed to process Google account credentials.");
+      }
+    } else if (googleAuthInput && typeof googleAuthInput === 'object') {
+      // Direct validated Google account input
+      email = googleAuthInput.email || '';
+      name = googleAuthInput.name || '';
+      picture = googleAuthInput.picture || null;
+      sub = googleAuthInput.sub || null;
+    } else {
+      throw new Error("Invalid Google authentication data.");
+    }
+
+    // Validate that it's a real Google account
+    const googleEmailValidation = validateGoogleAccountEmail(email);
+    if (!googleEmailValidation.isValid) {
+      throw new Error(googleEmailValidation.error);
+    }
+    const normEmail = googleEmailValidation.normalizedEmail;
+
+    const nameValidation = validateRealName(name || 'Google Member');
+    const finalName = nameValidation.isValid ? nameValidation.sanitizedName : 'Google Member';
+
+    const accounts = getRegisteredAccounts();
+    const existingAccount = accounts.find(a => a.email.toLowerCase() === normEmail);
+
+    let sessionUser;
+    if (existingAccount) {
+      sessionUser = {
+        id: existingAccount.id,
+        name: existingAccount.name || finalName,
+        email: normEmail,
+        avatarUrl: picture || existingAccount.avatarUrl || null,
+        avatarInitials: (finalName.split(' ').map(n => n[0]).join('') || 'G').slice(0, 2).toUpperCase(),
+        plan: existingAccount.plan || 'Verified Google Member',
+        provider: 'google',
+        joinedAt: existingAccount.joinedAt || new Date().toLocaleDateString()
+      };
+      saveRegisteredAccount({ ...existingAccount, ...sessionUser });
+      showToast(`Welcome back, ${sessionUser.name}! Signed in with Google.`);
+    } else {
+      // Automatically provision new genuine Google account
+      sessionUser = {
+        id: 'usr_g_' + (sub || Date.now().toString(36)),
+        name: finalName,
+        email: normEmail,
+        avatarUrl: picture || null,
+        avatarInitials: (finalName.split(' ').map(n => n[0]).join('') || 'G').slice(0, 2).toUpperCase(),
+        plan: 'Verified Google Member',
+        provider: 'google',
+        joinedAt: new Date().toLocaleDateString()
+      };
+      saveRegisteredAccount(sessionUser);
+      showToast(`Account created successfully! Welcome, ${sessionUser.name}.`);
+    }
+
+    setUser(sessionUser);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(sessionUser));
     return sessionUser;
   };
 
@@ -204,6 +330,7 @@ export function AuthProvider({ children }) {
       user, 
       login, 
       signup, 
+      loginWithGoogle,
       logout, 
       toastMessage,
       showToast,

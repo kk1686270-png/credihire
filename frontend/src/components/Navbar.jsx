@@ -179,8 +179,12 @@ export function Navbar({
                 aria-expanded={accountMenuOpen}
                 aria-haspopup="true"
               >
-                <div className="account-avatar-badge">
-                  {user.avatarInitials || 'US'}
+                <div className="account-avatar-badge" style={{ overflow: 'hidden' }}>
+                  {user.avatarUrl ? (
+                    <img src={user.avatarUrl} alt={user.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    user.avatarInitials || 'US'
+                  )}
                 </div>
                 <div className="account-info-text text-start">
                   <span className="account-name-text">{user.name}</span>
@@ -194,8 +198,12 @@ export function Navbar({
                   {/* Account Header */}
                   <div className="p-3 border-bottom border-secondary border-opacity-25">
                     <div className="d-flex align-items-center gap-2 mb-1">
-                      <div className="account-avatar-badge" style={{ width: '34px', height: '34px', fontSize: '0.85rem' }}>
-                        {user.avatarInitials}
+                      <div className="account-avatar-badge" style={{ width: '34px', height: '34px', fontSize: '0.85rem', overflow: 'hidden' }}>
+                        {user.avatarUrl ? (
+                          <img src={user.avatarUrl} alt={user.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        ) : (
+                          user.avatarInitials
+                        )}
                       </div>
                       <div className="overflow-hidden">
                         <div className="text-white fw-bold text-truncate" style={{ fontSize: '0.9rem' }}>

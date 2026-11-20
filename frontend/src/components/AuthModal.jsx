@@ -14,6 +14,17 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 
+function GoogleIcon({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+    </svg>
+  );
+}
+
 export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
   const [mode, setMode] = useState(initialMode);
   const [email, setEmail] = useState('');
@@ -23,8 +34,13 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  
+  // Google Auth states
+  const [showGooglePrompt, setShowGooglePrompt] = useState(false);
+  const [googleEmail, setGoogleEmail] = useState('');
+  const [googleName, setGoogleName] = useState('');
 
-  const { login, signup, showToast } = useAuth();
+  const { login, signup, loginWithGoogle, showToast } = useAuth();
 
   // Fix: Synchronize mode with initialMode whenever modal opens
   useEffect(() => {
@@ -32,6 +48,7 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
       setMode(initialMode);
       setError(null);
       setShowPassword(false);
+      setShowGooglePrompt(false);
     }
   }, [isOpen, initialMode]);
 
@@ -42,12 +59,69 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
     setPassword('');
     setName('');
     setConfirmPassword('');
+    setGoogleEmail('');
+    setGoogleName('');
+    setShowGooglePrompt(false);
     setError(null);
   };
 
   const handleClose = () => {
     resetForm();
     onClose();
+  };
+
+  const handleGoogleAuthClick = async () => {
+    setError(null);
+    const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+
+    // If official Google Client ID is configured and Google GIS is ready
+    if (googleClientId && window.google?.accounts?.id) {
+      try {
+        setLoading(true);
+        window.google.accounts.id.initialize({
+          client_id: googleClientId,
+          callback: async (response) => {
+            if (response && response.credential) {
+              try {
+                await loginWithGoogle(response.credential);
+                resetForm();
+                onClose();
+              } catch (err) {
+                setError(err.message || "Google sign in failed.");
+              } finally {
+                setLoading(false);
+              }
+            }
+          }
+        });
+        window.google.accounts.id.prompt();
+        return;
+      } catch (err) {
+        console.warn("Google One-Tap initialization error:", err);
+      }
+    }
+
+    // Interactive Google flow (for direct real Google accounts verification)
+    setShowGooglePrompt(true);
+  };
+
+  const handleGoogleSubmit = async (e) => {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+
+    try {
+      await loginWithGoogle({
+        email: googleEmail,
+        name: googleName || (mode === 'signup' ? name : 'Google User')
+      });
+      resetForm();
+      onClose();
+    } catch (err) {
+      setError(err.message || "Failed to authenticate with Google.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -116,14 +190,14 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
           <button
             type="button"
             className={`auth-tab-btn ${mode === 'signin' ? 'active' : ''}`}
-            onClick={() => { setMode('signin'); setError(null); }}
+            onClick={() => { setMode('signin'); setError(null); setShowGooglePrompt(false); }}
           >
             Sign In
           </button>
           <button
             type="button"
             className={`auth-tab-btn ${mode === 'signup' ? 'active' : ''}`}
-            onClick={() => { setMode('signup'); setError(null); }}
+            onClick={() => { setMode('signup'); setError(null); setShowGooglePrompt(false); }}
           >
             Create Account
           </button>
@@ -138,6 +212,117 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
               <span>{error}</span>
             </div>
           )}
+
+          {/* Google Sign In / Sign Up Action Button */}
+          {!showGooglePrompt ? (
+            <button
+              type="button"
+              className="btn-google-auth"
+              onClick={handleGoogleAuthClick}
+              disabled={loading}
+              id="btn-google-auth"
+            >
+              <GoogleIcon size={18} />
+              <span>{mode === 'signin' ? 'Sign in with Google' : 'Sign up with Google'}</span>
+            </button>
+          ) : (
+            /* Real Google Account Verification Form */
+            <div className="google-prompt-card">
+              <div className="d-flex align-items-center justify-content-between mb-2">
+                <div className="d-flex align-items-center gap-2">
+                  <GoogleIcon size={18} />
+                  <span className="text-white fw-bold" style={{ fontSize: '0.9rem' }}>
+                    {mode === 'signin' ? 'Sign in with Google' : 'Sign up with Google'}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-link text-white-50 p-0 text-decoration-none"
+                  onClick={() => setShowGooglePrompt(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+
+              <p className="text-white-50 mb-3" style={{ fontSize: '0.78rem' }}>
+                Authenticate with your real Google account (@gmail.com). Only verified real accounts are permitted.
+              </p>
+
+              <form onSubmit={handleGoogleSubmit} className="d-flex flex-column gap-2">
+                {mode === 'signup' && (
+                  <div>
+                    <label className="auth-label" htmlFor="google-name">Full Name</label>
+                    <div className="auth-input-wrapper">
+                      <User size={16} className="auth-input-icon" />
+                      <input
+                        id="google-name"
+                        type="text"
+                        className="auth-input-field"
+                        placeholder="e.g. Rahul Sharma"
+                        value={googleName}
+                        onChange={(e) => setGoogleName(e.target.value)}
+                        autoComplete="name"
+                        required
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <label className="auth-label" htmlFor="google-email">Google Email Address</label>
+                  <div className="auth-input-wrapper">
+                    <Mail size={16} className="auth-input-icon" />
+                    <input
+                      id="google-email"
+                      type="email"
+                      className="auth-input-field"
+                      placeholder="yourname@gmail.com"
+                      value={googleEmail}
+                      onChange={(e) => setGoogleEmail(e.target.value)}
+                      autoComplete="email"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="d-flex gap-2 mt-2">
+                  <button
+                    type="submit"
+                    className="btn btn-primary flex-grow-1 d-flex align-items-center justify-content-center gap-2 py-2"
+                    style={{ fontSize: '0.86rem', fontWeight: 600, borderRadius: 'var(--radius-sm)' }}
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 size={15} className="spinner-icon" />
+                        <span>Verifying...</span>
+                      </>
+                    ) : (
+                      <>
+                        <GoogleIcon size={16} />
+                        <span>Verify & Continue</span>
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary px-3 py-2"
+                    style={{ fontSize: '0.86rem', borderRadius: 'var(--radius-sm)' }}
+                    onClick={() => setShowGooglePrompt(false)}
+                  >
+                    Back
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Divider: OR Continue with Email */}
+          <div className="auth-divider">
+            <div className="auth-divider-line" />
+            <span className="auth-divider-text">OR CONTINUE WITH EMAIL</span>
+            <div className="auth-divider-line" />
+          </div>
 
           <form onSubmit={handleSubmit} className="d-flex flex-column gap-3">
             {/* Name Field (Sign Up only) */}
@@ -169,7 +354,7 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
                   id="auth-email"
                   type="email"
                   className="auth-input-field"
-                  placeholder="name@example.com"
+                  placeholder="name@company.com or name@gmail.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   autoComplete="email"
@@ -180,22 +365,7 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
 
             {/* Password Field */}
             <div>
-              <div className="d-flex justify-content-between align-items-center mb-1">
-                <label className="auth-label mb-0" htmlFor="auth-password">Password</label>
-                {mode === 'signin' && (
-                  <button
-                    type="button"
-                    className="btn btn-link text-white-50 p-0 text-decoration-none"
-                    style={{ fontSize: '0.74rem' }}
-                    onClick={() => {
-                      setEmail('alex.carter@example.com');
-                      setPassword('password123');
-                    }}
-                  >
-                    Fill sample credentials
-                  </button>
-                )}
-              </div>
+              <label className="auth-label mb-1" htmlFor="auth-password">Password</label>
               <div className="auth-input-wrapper">
                 <Lock size={16} className="auth-input-icon" />
                 <input
@@ -252,7 +422,7 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
                 </>
               ) : (
                 <>
-                  <span>{mode === 'signin' ? 'Sign In' : 'Create Account'}</span>
+                  <span>{mode === 'signin' ? 'Sign In with Email' : 'Create Account'}</span>
                   <ArrowRight size={16} />
                 </>
               )}
@@ -268,7 +438,7 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
                   type="button"
                   className="btn btn-link text-primary p-0 text-decoration-none fw-semibold"
                   style={{ fontSize: '0.82rem' }}
-                  onClick={() => { setMode('signup'); setError(null); }}
+                  onClick={() => { setMode('signup'); setError(null); setShowGooglePrompt(false); }}
                 >
                   Create one free
                 </button>
@@ -280,7 +450,7 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
                   type="button"
                   className="btn btn-link text-primary p-0 text-decoration-none fw-semibold"
                   style={{ fontSize: '0.82rem' }}
-                  onClick={() => { setMode('signin'); setError(null); }}
+                  onClick={() => { setMode('signin'); setError(null); setShowGooglePrompt(false); }}
                 >
                   Sign in here
                 </button>

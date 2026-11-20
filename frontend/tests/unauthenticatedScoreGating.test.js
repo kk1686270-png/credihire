@@ -70,3 +70,14 @@ test('RiskScoreCard.jsx hides risk percentage score and shows Locked badge when 
   assert.ok(content.includes('Score Hidden'), 'Shows Score Hidden title');
   assert.ok(content.includes('Please signin/signup'), 'Provides Please signin/signup prompt button');
 });
+
+test('AuthModal redirects unregistered login attempts to Create Account with a warning toast', () => {
+  const modalPath = path.join(rootDir, 'src', 'components', 'AuthModal.jsx');
+  const content = fs.readFileSync(modalPath, 'utf-8');
+
+  // Verify AuthModal catches ACCOUNT_NOT_FOUND
+  assert.ok(content.includes("err.code === 'ACCOUNT_NOT_FOUND'"), 'Catches ACCOUNT_NOT_FOUND error code');
+  assert.ok(content.includes("showToast"), 'Triggers warning toast');
+  assert.ok(content.includes("setMode('signup')"), 'Redirects/switches mode to signup view');
+});
+

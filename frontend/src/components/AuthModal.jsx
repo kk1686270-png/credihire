@@ -25,7 +25,7 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const { login, signup, loginWithDemo } = useAuth();
+  const { login, signup, loginWithDemo, showToast } = useAuth();
 
   // Fix: Synchronize mode with initialMode whenever modal opens
   useEffect(() => {
@@ -68,7 +68,15 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
       resetForm();
       onClose();
     } catch (err) {
-      setError(err.message || "Authentication failed. Please check your credentials.");
+      if (err.code === 'ACCOUNT_NOT_FOUND') {
+        if (showToast) {
+          showToast("No account found. Please create an account.", "warning");
+        }
+        setMode('signup');
+        setError("No account found with this email. Please create your account below.");
+      } else {
+        setError(err.message || "Authentication failed. Please check your credentials.");
+      }
     } finally {
       setLoading(false);
     }

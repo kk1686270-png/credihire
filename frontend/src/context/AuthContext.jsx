@@ -6,6 +6,26 @@ const AuthContext = createContext(null);
 
 const STORAGE_KEY = 'credihire_user_session';
 const HISTORY_KEY_PREFIX = 'credihire_history_';
+const USERS_STORAGE_KEY = 'credihire_registered_accounts';
+
+const getRegisteredAccounts = () => {
+  try {
+    const data = localStorage.getItem(USERS_STORAGE_KEY);
+    return data ? JSON.parse(data) : [];
+  } catch {
+    return [];
+  }
+};
+
+const saveRegisteredAccount = (account) => {
+  try {
+    const accounts = getRegisteredAccounts();
+    const updated = [...accounts.filter(a => a.email.toLowerCase() !== account.email.toLowerCase()), account];
+    localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(updated));
+  } catch (e) {
+    console.warn("Could not save account to localStorage:", e);
+  }
+};
 
 const createDemoHistory = () => {
   const demoResult = (text) => ({
@@ -106,19 +126,33 @@ export function AuthProvider({ children }) {
       throw new Error("Please enter both email and password.");
     }
 
-    const isDemo = email.toLowerCase() === 'alex.carter@example.com';
-    const generatedName = email.split('@')[0]
+    const normEmail = email.toLowerCase().trim();
+    const isDemo = normEmail === 'alex.carter@example.com';
+    const accounts = getRegisteredAccounts();
+    const existingAccount = accounts.find(a => a.email.toLowerCase() === normEmail);
+
+    if (!isDemo && !existingAccount) {
+      const error = new Error("No account found with this email. Please create an account first.");
+      error.code = 'ACCOUNT_NOT_FOUND';
+      throw error;
+    }
+
+    if (existingAccount && existingAccount.password && existingAccount.password !== password) {
+      throw new Error("Incorrect password. Please try again.");
+    }
+
+    const generatedName = existingAccount?.name || (normEmail.split('@')[0]
       .split(/[._-]/)
       .map(part => part.charAt(0).toUpperCase() + part.slice(1))
-      .join(' ') || 'Job Seeker';
+      .join(' ') || 'Job Seeker');
 
     const userData = {
-      id: isDemo ? 'usr_alex_demo' : 'usr_' + Date.now().toString(36),
+      id: isDemo ? 'usr_alex_demo' : (existingAccount?.id || 'usr_' + Date.now().toString(36)),
       name: isDemo ? 'Alex Carter' : generatedName,
-      email: email.toLowerCase(),
+      email: normEmail,
       avatarInitials: isDemo ? 'AC' : (generatedName.split(' ').map(n => n[0]).join('') || 'U').slice(0, 2).toUpperCase(),
-      plan: 'Verified Job Seeker',
-      joinedAt: new Date().toLocaleDateString()
+      plan: existingAccount?.plan || 'Verified Job Seeker',
+      joinedAt: existingAccount?.joinedAt || new Date().toLocaleDateString()
     };
 
     setUser(userData);
@@ -135,19 +169,26 @@ export function AuthProvider({ children }) {
       throw new Error("Password must be at least 6 characters.");
     }
 
+    const normEmail = email.toLowerCase().trim();
     const userData = {
       id: 'usr_' + Date.now().toString(36),
       name: name.trim(),
-      email: email.toLowerCase().trim(),
+      email: normEmail,
+      password: password,
       avatarInitials: (name.trim().split(' ').map(n => n[0]).join('') || 'U').slice(0, 2).toUpperCase(),
       plan: 'New Member Shield',
       joinedAt: new Date().toLocaleDateString()
     };
 
-    setUser(userData);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(userData));
-    showToast(`Account created successfully! Welcome, ${userData.name}.`);
-    return userData;
+    saveRegisteredAccount(userData);
+
+    const sessionUser = { ...userData };
+    delete sessionUser.password;
+
+    setUser(sessionUser);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(sessionUser));
+    showToast(`Account created successfully! Welcome, ${sessionUser.name}.`);
+    return sessionUser;
   };
 
   const logout = () => {

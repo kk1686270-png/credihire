@@ -1207,36 +1207,6 @@
   box-shadow: 0 0 10px rgba(121, 80, 242, 0.8);
 }
 
-/* Demo Quick Login Box */
-.demo-auth-box {
-  background: rgba(121, 80, 242, 0.08);
-  border: 1px dashed rgba(139, 92, 246, 0.4);
-  border-radius: var(--radius-sm);
-  padding: 10px 14px;
-}
-
-.btn-demo-quick-login {
-  width: 100%;
-  background: rgba(139, 92, 246, 0.18);
-  border: 1px solid rgba(139, 92, 246, 0.4);
-  color: #c4b5fd;
-  border-radius: 6px;
-  padding: 8px 12px;
-  font-size: 0.82rem;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.btn-demo-quick-login:hover {
-  background: rgba(139, 92, 246, 0.32);
-  color: #FFFFFF;
-  border-color: rgba(139, 92, 246, 0.7);
-}
-
 /* Auth Form Inputs */
 .auth-label {
   display: block;

@@ -1,6 +1,4 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { INITIAL_DEMO_DATA } from '../data/demoAnalysis.js';
-import { analyzeJobOfferLocally } from '../services/mockAnalysisService.js';
 
 const AuthContext = createContext(null);
 
@@ -27,58 +25,6 @@ const saveRegisteredAccount = (account) => {
   }
 };
 
-const createDemoHistory = () => {
-  const demoResult = (text) => ({
-    ...analyzeJobOfferLocally(text),
-    isDemo: true,
-    sourceNotice: 'Demo reference data — not a live scan.'
-  });
-  const taskScan = demoResult('Earn ₹5,000 daily by rating YouTube videos. Join our Telegram channel @DailyTasks and deposit ₹2,000 to unlock VIP payouts.');
-  const legitScan = demoResult('Dear Alex, We invite you for a 45-minute Google Meet technical interview for the Frontend Engineer position at Acme Corp. No fees or banking info required.');
-
-  return [
-    {
-      id: 'hist_1',
-      date: 'Today, 2:14 PM',
-      text: INITIAL_DEMO_DATA.submittedText,
-      riskScore: INITIAL_DEMO_DATA.riskScore,
-      riskLevel: INITIAL_DEMO_DATA.riskLevel,
-      headline: INITIAL_DEMO_DATA.headline,
-      summary: INITIAL_DEMO_DATA.summary,
-      channel: 'whatsapp',
-      warningsCount: INITIAL_DEMO_DATA.warningSigns.length,
-      warningTitles: INITIAL_DEMO_DATA.warningSigns.map(w => w.title),
-      fullResult: INITIAL_DEMO_DATA
-    },
-    {
-      id: 'hist_2',
-      date: 'Yesterday, 11:30 AM',
-      text: taskScan.submittedText,
-      riskScore: taskScan.riskScore,
-      riskLevel: taskScan.riskLevel,
-      headline: taskScan.headline,
-      summary: taskScan.summary,
-      channel: 'telegram',
-      warningsCount: taskScan.warningSigns.length,
-      warningTitles: taskScan.warningSigns.map(w => w.title),
-      fullResult: taskScan
-    },
-    {
-      id: 'hist_3',
-      date: 'Oct 26, 4:15 PM',
-      text: legitScan.submittedText,
-      riskScore: legitScan.riskScore,
-      riskLevel: legitScan.riskLevel,
-      headline: legitScan.headline,
-      summary: legitScan.summary,
-      channel: 'email',
-      warningsCount: legitScan.warningSigns.length,
-      warningTitles: legitScan.warningSigns.map(w => w.title),
-      fullResult: legitScan
-    }
-  ];
-};
-
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
     try {
@@ -99,11 +45,6 @@ export function AuthProvider({ children }) {
         const savedHistory = localStorage.getItem(HISTORY_KEY_PREFIX + user.id);
         if (savedHistory) {
           setHistory(JSON.parse(savedHistory));
-        } else if (user.email === 'alex.carter@example.com') {
-          // Pre-populate demo history for Alex Carter
-          const demoHistory = createDemoHistory();
-          setHistory(demoHistory);
-          localStorage.setItem(HISTORY_KEY_PREFIX + user.id, JSON.stringify(demoHistory));
         } else {
           setHistory([]);
         }
@@ -127,32 +68,28 @@ export function AuthProvider({ children }) {
     }
 
     const normEmail = email.toLowerCase().trim();
-    const isDemo = normEmail === 'alex.carter@example.com';
     const accounts = getRegisteredAccounts();
     const existingAccount = accounts.find(a => a.email.toLowerCase() === normEmail);
 
-    if (!isDemo && !existingAccount) {
+    if (!existingAccount) {
       const error = new Error("No account found with this email. Please create an account first.");
       error.code = 'ACCOUNT_NOT_FOUND';
       throw error;
     }
 
-    if (existingAccount && existingAccount.password && existingAccount.password !== password) {
+    if (existingAccount.password && existingAccount.password !== password) {
       throw new Error("Incorrect password. Please try again.");
     }
 
-    const generatedName = existingAccount?.name || (normEmail.split('@')[0]
-      .split(/[._-]/)
-      .map(part => part.charAt(0).toUpperCase() + part.slice(1))
-      .join(' ') || 'Job Seeker');
+    const generatedName = existingAccount.name || 'Job Seeker';
 
     const userData = {
-      id: isDemo ? 'usr_alex_demo' : (existingAccount?.id || 'usr_' + Date.now().toString(36)),
-      name: isDemo ? 'Alex Carter' : generatedName,
+      id: existingAccount.id || 'usr_' + Date.now().toString(36),
+      name: generatedName,
       email: normEmail,
-      avatarInitials: isDemo ? 'AC' : (generatedName.split(' ').map(n => n[0]).join('') || 'U').slice(0, 2).toUpperCase(),
-      plan: existingAccount?.plan || 'Verified Job Seeker',
-      joinedAt: existingAccount?.joinedAt || new Date().toLocaleDateString()
+      avatarInitials: existingAccount.avatarInitials || (generatedName.split(' ').map(n => n[0]).join('') || 'U').slice(0, 2).toUpperCase(),
+      plan: existingAccount.plan || 'Verified Job Seeker',
+      joinedAt: existingAccount.joinedAt || new Date().toLocaleDateString()
     };
 
     setUser(userData);
@@ -197,10 +134,6 @@ export function AuthProvider({ children }) {
     setHistory([]);
     localStorage.removeItem(STORAGE_KEY);
     showToast(`Signed out successfully. See you soon, ${prevName}!`);
-  };
-
-  const loginWithDemo = () => {
-    return login('alex.carter@example.com', 'password123');
   };
 
   const addScanToHistory = (scanResult) => {
@@ -272,7 +205,6 @@ export function AuthProvider({ children }) {
       login, 
       signup, 
       logout, 
-      loginWithDemo, 
       toastMessage,
       showToast,
       history,

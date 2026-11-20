@@ -7,7 +7,6 @@ import {
   Eye, 
   EyeOff, 
   Shield, 
-  Sparkles, 
   ArrowRight, 
   CheckCircle2, 
   AlertCircle,
@@ -25,7 +24,7 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const { login, signup, loginWithDemo, showToast } = useAuth();
+  const { login, signup, showToast } = useAuth();
 
   // Fix: Synchronize mode with initialMode whenever modal opens
   useEffect(() => {
@@ -82,20 +81,6 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
     }
   };
 
-  const handleDemoSignIn = async () => {
-    setError(null);
-    setLoading(true);
-    try {
-      await loginWithDemo();
-      resetForm();
-      onClose();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <div className="modal-overlay" onClick={handleClose} role="dialog" aria-modal="true">
       <div className="modal-dialog-custom auth-modal-dialog" onClick={(e) => e.stopPropagation()}>
@@ -146,30 +131,6 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
 
         {/* Modal Body */}
         <div className="modal-body-custom pt-3">
-          {/* Quick Demo One-Click Access (Convenient for Reviewers) */}
-          {mode === 'signin' && (
-            <div className="demo-auth-box mb-3">
-              <div className="d-flex align-items-center justify-content-between mb-2">
-                <span className="text-white fw-semibold d-flex align-items-center gap-1" style={{ fontSize: '0.8rem' }}>
-                  <Sparkles size={13} className="text-warning" />
-                  Instant Test Account:
-                </span>
-                <span className="badge bg-secondary bg-opacity-50 text-white-50" style={{ fontSize: '0.7rem' }}>
-                  Hackathon Review
-                </span>
-              </div>
-              <button
-                type="button"
-                className="btn-demo-quick-login"
-                onClick={handleDemoSignIn}
-                disabled={loading}
-              >
-                <span>Sign in as Alex Carter (1-Click Demo)</span>
-                <ArrowRight size={14} />
-              </button>
-            </div>
-          )}
-
           {/* Error Notice */}
           {error && (
             <div className="input-feedback-error mb-3 p-2 rounded" style={{ background: 'rgba(255, 64, 88, 0.1)', border: '1px solid rgba(255, 64, 88, 0.3)' }}>

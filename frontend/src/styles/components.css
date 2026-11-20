@@ -312,13 +312,14 @@
 }
 
 .char-counter-inline {
-  position: absolute;
-  right: 0;
-  bottom: 0;
+  position: relative;
   font-size: 0.76rem;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
   user-select: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 .btn-check-offer {

@@ -145,3 +145,26 @@ export function shouldSubmitOnEnter(e, { isLoading = false, inputText = '', atta
   return true;
 }
 
+export const INDICATOR_TITLES = {
+  upfront_registration_fee: 'Upfront Registration Fee Demand',
+  task_deposit: 'Task Deposit / Recharge Demand',
+  withdrawal_fee: 'Withdrawal Block & Clearance Fee',
+  unrealistic_earnings: 'Unrealistic Earnings Claim',
+  urgency_pressure: 'Urgency & High-Pressure Tactics',
+  sensitive_credentials: 'Sensitive Credentials / OTP Solicitation',
+  advance_fee: 'Advance Fee / Security Deposit'
+};
+
+export function formatWarningTitle(code) {
+  if (!code) return 'Warning Sign';
+  if (INDICATOR_TITLES[code]) return INDICATOR_TITLES[code];
+  if (typeof code === 'string' && code.includes('_')) {
+    return code
+      .split('_')
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  }
+  return String(code);
+}
+
+

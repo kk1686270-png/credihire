@@ -1,11 +1,14 @@
 import React from 'react';
 import { AlertTriangle, X, ShieldAlert, ArrowRight, CheckCircle2, ShieldCheck } from 'lucide-react';
+import { formatWarningTitle } from '../utils/validation.js';
 
 export function PatternExplainerModal({ warning, onClose }) {
   if (!warning) return null;
 
+  const titleText = formatWarningTitle(warning.title);
+
   const explainer = warning.patternExplainer || {
-    whatItIs: warning.title,
+    whatItIs: titleText,
     whyItMatters: warning.explanation,
     realWorldTactic: "Attackers disguise demands as standard corporate recruitment policies.",
     immediateAction: "Independently contact the company through verified public channels."
@@ -24,7 +27,7 @@ export function PatternExplainerModal({ warning, onClose }) {
               <div className="badge bg-danger bg-opacity-25 text-danger px-2 py-1 mb-1" style={{ fontSize: '0.7rem' }}>
                 SCAM PATTERN EXPLAINER
               </div>
-              <h2 className="modal-title mb-0" style={{ fontSize: '1.15rem' }}>{warning.title}</h2>
+              <h2 className="modal-title mb-0" style={{ fontSize: '1.15rem' }}>{titleText}</h2>
             </div>
           </div>
           <button

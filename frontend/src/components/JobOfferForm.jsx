@@ -312,7 +312,7 @@ export function JobOfferForm({
                 aria-describedby="char-count"
               />
 
-              <div className="d-flex align-items-center justify-content-between mt-1">
+              <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mt-1">
                 <div className="d-flex align-items-center gap-2">
                   {inputText.length > 0 && (
                     <button
@@ -387,7 +387,7 @@ export function JobOfferForm({
                 aria-label="Recruitment website URL to analyze"
               />
 
-              <div className="d-flex align-items-center justify-content-between mt-1">
+              <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mt-1">
                 <div className="d-flex align-items-center gap-2">
                   {urlInput.length > 0 && (
                     <button

@@ -11,6 +11,7 @@ import {
   ExternalLink,
   ChevronRight
 } from 'lucide-react';
+import { formatWarningTitle } from '../utils/validation.js';
 
 const ICON_MAP = {
   CreditCard,
@@ -68,7 +69,7 @@ export function WarningSigns({ warningSigns = [], onSelectWarning }) {
 
               <div className="warning-content">
                 <div className="warning-title">
-                  <span>{sign.title}</span>
+                  <span>{formatWarningTitle(sign.title)}</span>
                   {sign.externalUrl && (
                     <a
                       href={sign.externalUrl}

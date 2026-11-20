@@ -1263,13 +1263,143 @@
   white-space: nowrap;
 }
 
-/* Google Prompt Card */
+/* Google Prompt Card & Account Chooser */
 .google-prompt-card {
   background: rgba(66, 133, 244, 0.08);
   border: 1px solid rgba(66, 133, 244, 0.3);
   border-radius: var(--radius-sm);
   padding: 14px;
   margin-bottom: 14px;
+}
+
+.google-chooser-card {
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(66, 133, 244, 0.35);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 16px rgba(66, 133, 244, 0.15);
+  margin-bottom: 14px;
+}
+
+.google-chooser-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.google-chooser-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #FFFFFF;
+  margin-top: 8px;
+  margin-bottom: 2px;
+}
+
+.google-chooser-subtitle {
+  font-size: 0.78rem;
+  color: #94a3b8;
+}
+
+.google-accounts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 240px;
+  overflow-y: auto;
+  margin-bottom: 10px;
+}
+
+.google-account-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s ease;
+}
+
+.google-account-btn:hover {
+  background: rgba(66, 133, 244, 0.15);
+  border-color: rgba(66, 133, 244, 0.5);
+  transform: translateX(2px);
+}
+
+.google-avatar-circle {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: #FFFFFF;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.google-account-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.google-account-name {
+  color: #FFFFFF;
+  font-weight: 600;
+  font-size: 0.88rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.google-account-email {
+  color: #94a3b8;
+  font-size: 0.76rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
+}
+
+.btn-add-google-account {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 12px;
+  background: transparent;
+  border: 1px dashed rgba(255, 255, 255, 0.16);
+  border-radius: var(--radius-sm);
+  color: #94a3b8;
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-add-google-account:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #FFFFFF;
+}
+
+.google-chooser-footer {
+  font-size: 0.7rem;
+  color: #64748b;
+  text-align: center;
+  margin-top: 8px;
+  line-height: 1.35;
 }
 
 /* Auth Form Inputs */

@@ -10,6 +10,7 @@ import {
   validateRealPassword,
   DISPOSABLE_OR_TEST_DOMAINS 
 } from '../src/utils/validation.js';
+import { getSavedGoogleAccounts, saveGoogleAccount } from '../src/utils/googleAccounts.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -119,7 +120,9 @@ test('AuthModal renders Google Sign-In button and integrates loginWithGoogle', (
   assert.ok(content.includes('GoogleIcon'), 'AuthModal renders GoogleIcon');
   assert.ok(content.includes('Sign in with Google'), 'Supports Sign in with Google');
   assert.ok(content.includes('Sign up with Google'), 'Supports Sign up with Google');
-  assert.ok(content.includes('google-prompt-card'), 'Provides Google account verification prompt');
+  assert.ok(content.includes('google-chooser-card'), 'Provides Google account chooser modal');
+  assert.ok(content.includes('Choose an account'), 'Displays Choose an account prompt');
+  assert.ok(content.includes('google-account-btn'), 'Renders user Google account selection buttons');
   assert.ok(!content.includes('alex.carter@example.com'), 'Sample demo credentials completely absent');
 });
 
@@ -132,4 +135,15 @@ test('AuthContext exports loginWithGoogle and validates real Google accounts', (
   assert.ok(content.includes('validateGoogleAccountEmail'), 'AuthContext imports validateGoogleAccountEmail');
   assert.ok(content.includes('validateRealName'), 'AuthContext imports validateRealName');
   assert.ok(content.includes('provider: \'google\''), 'Tags Google accounts with provider: google');
+});
+
+test('googleAccounts utility returns available Google accounts for user selection', () => {
+  const accounts = getSavedGoogleAccounts();
+  assert.ok(Array.isArray(accounts), 'Returns array of accounts');
+  assert.ok(accounts.length >= 1, 'Contains at least one account');
+  assert.ok(accounts[0].email.endsWith('@gmail.com'), 'Account email ends with @gmail.com');
+
+  const custom = { name: 'Test Custom', email: 'custom.person@gmail.com' };
+  const updated = saveGoogleAccount(custom);
+  assert.ok(updated.some(a => a.email === 'custom.person@gmail.com'), 'Saves custom Google account');
 });

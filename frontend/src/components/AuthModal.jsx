@@ -10,9 +10,11 @@ import {
   ArrowRight, 
   CheckCircle2, 
   AlertCircle,
-  Loader2
+  Loader2,
+  UserPlus
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
+import { getSavedGoogleAccounts, saveGoogleAccount } from '../utils/googleAccounts.js';
 
 function GoogleIcon({ size = 18 }) {
   return (
@@ -35,20 +37,24 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   
-  // Google Auth states
-  const [showGooglePrompt, setShowGooglePrompt] = useState(false);
-  const [googleEmail, setGoogleEmail] = useState('');
-  const [googleName, setGoogleName] = useState('');
+  // Google Account Chooser states
+  const [showGoogleChooser, setShowGoogleChooser] = useState(false);
+  const [googleAccounts, setGoogleAccounts] = useState([]);
+  const [isAddingNewAccount, setIsAddingNewAccount] = useState(false);
+  const [customGoogleEmail, setCustomGoogleEmail] = useState('');
+  const [customGoogleName, setCustomGoogleName] = useState('');
 
   const { login, signup, loginWithGoogle, showToast } = useAuth();
 
-  // Fix: Synchronize mode with initialMode whenever modal opens
+  // Synchronize mode with initialMode whenever modal opens
   useEffect(() => {
     if (isOpen) {
       setMode(initialMode);
       setError(null);
       setShowPassword(false);
-      setShowGooglePrompt(false);
+      setShowGoogleChooser(false);
+      setIsAddingNewAccount(false);
+      setGoogleAccounts(getSavedGoogleAccounts());
     }
   }, [isOpen, initialMode]);
 
@@ -59,9 +65,10 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
     setPassword('');
     setName('');
     setConfirmPassword('');
-    setGoogleEmail('');
-    setGoogleName('');
-    setShowGooglePrompt(false);
+    setCustomGoogleEmail('');
+    setCustomGoogleName('');
+    setShowGoogleChooser(false);
+    setIsAddingNewAccount(false);
     setError(null);
   };
 
@@ -70,51 +77,44 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
     onClose();
   };
 
-  const handleGoogleAuthClick = async () => {
+  const handleOpenGoogleChooser = () => {
     setError(null);
-    const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-
-    // If official Google Client ID is configured and Google GIS is ready
-    if (googleClientId && window.google?.accounts?.id) {
-      try {
-        setLoading(true);
-        window.google.accounts.id.initialize({
-          client_id: googleClientId,
-          callback: async (response) => {
-            if (response && response.credential) {
-              try {
-                await loginWithGoogle(response.credential);
-                resetForm();
-                onClose();
-              } catch (err) {
-                setError(err.message || "Google sign in failed.");
-              } finally {
-                setLoading(false);
-              }
-            }
-          }
-        });
-        window.google.accounts.id.prompt();
-        return;
-      } catch (err) {
-        console.warn("Google One-Tap initialization error:", err);
-      }
-    }
-
-    // Interactive Google flow (for direct real Google accounts verification)
-    setShowGooglePrompt(true);
+    setGoogleAccounts(getSavedGoogleAccounts());
+    setShowGoogleChooser(true);
+    setIsAddingNewAccount(false);
   };
 
-  const handleGoogleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSelectGoogleAccount = async (account) => {
     setError(null);
     setLoading(true);
 
     try {
       await loginWithGoogle({
-        email: googleEmail,
-        name: googleName || (mode === 'signup' ? name : 'Google User')
+        email: account.email,
+        name: account.name || (mode === 'signup' ? name : 'Google User')
       });
+      saveGoogleAccount(account);
+      resetForm();
+      onClose();
+    } catch (err) {
+      setError(err.message || "Failed to authenticate with Google account.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddCustomGoogleAccount = async (e) => {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+
+    try {
+      const newAcc = {
+        email: customGoogleEmail,
+        name: customGoogleName || (mode === 'signup' ? name : 'Google User')
+      };
+      await loginWithGoogle(newAcc);
+      saveGoogleAccount(newAcc);
       resetForm();
       onClose();
     } catch (err) {
@@ -185,23 +185,25 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
           </button>
         </div>
 
-        {/* Auth Mode Tabs */}
-        <div className="auth-tabs-row">
-          <button
-            type="button"
-            className={`auth-tab-btn ${mode === 'signin' ? 'active' : ''}`}
-            onClick={() => { setMode('signin'); setError(null); setShowGooglePrompt(false); }}
-          >
-            Sign In
-          </button>
-          <button
-            type="button"
-            className={`auth-tab-btn ${mode === 'signup' ? 'active' : ''}`}
-            onClick={() => { setMode('signup'); setError(null); setShowGooglePrompt(false); }}
-          >
-            Create Account
-          </button>
-        </div>
+        {/* Auth Mode Tabs (only when not in Google Chooser) */}
+        {!showGoogleChooser && (
+          <div className="auth-tabs-row">
+            <button
+              type="button"
+              className={`auth-tab-btn ${mode === 'signin' ? 'active' : ''}`}
+              onClick={() => { setMode('signin'); setError(null); }}
+            >
+              Sign In
+            </button>
+            <button
+              type="button"
+              className={`auth-tab-btn ${mode === 'signup' ? 'active' : ''}`}
+              onClick={() => { setMode('signup'); setError(null); }}
+            >
+              Create Account
+            </button>
+          </div>
+        )}
 
         {/* Modal Body */}
         <div className="modal-body-custom pt-3">
@@ -213,54 +215,179 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
             </div>
           )}
 
-          {/* Google Sign In / Sign Up Action Button */}
-          {!showGooglePrompt ? (
-            <button
-              type="button"
-              className="btn-google-auth"
-              onClick={handleGoogleAuthClick}
-              disabled={loading}
-              id="btn-google-auth"
-            >
-              <GoogleIcon size={18} />
-              <span>{mode === 'signin' ? 'Sign in with Google' : 'Sign up with Google'}</span>
-            </button>
-          ) : (
-            /* Real Google Account Verification Form */
-            <div className="google-prompt-card">
-              <div className="d-flex align-items-center justify-content-between mb-2">
-                <div className="d-flex align-items-center gap-2">
-                  <GoogleIcon size={18} />
-                  <span className="text-white fw-bold" style={{ fontSize: '0.9rem' }}>
-                    {mode === 'signin' ? 'Sign in with Google' : 'Sign up with Google'}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  className="btn btn-sm btn-link text-white-50 p-0 text-decoration-none"
-                  onClick={() => setShowGooglePrompt(false)}
-                >
-                  Cancel
-                </button>
+          {showGoogleChooser ? (
+            /* Google Account Chooser: Shows all user Google accounts */
+            <div className="google-chooser-card">
+              <div className="google-chooser-header">
+                <GoogleIcon size={30} />
+                <h3 className="google-chooser-title">Choose an account</h3>
+                <span className="google-chooser-subtitle">
+                  to continue to <strong className="text-white">CrediHire</strong>
+                </span>
               </div>
 
-              <p className="text-white-50 mb-3" style={{ fontSize: '0.78rem' }}>
-                Authenticate with your real Google account (@gmail.com). Only verified real accounts are permitted.
-              </p>
+              {!isAddingNewAccount ? (
+                <>
+                  <div className="google-accounts-list">
+                    {googleAccounts.map((acc) => (
+                      <button
+                        key={acc.email}
+                        type="button"
+                        className="google-account-btn"
+                        onClick={() => handleSelectGoogleAccount(acc)}
+                        disabled={loading}
+                        id={`btn-google-account-${acc.email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '-')}`}
+                      >
+                        <div
+                          className="google-avatar-circle"
+                          style={{ background: acc.avatarColor || '#4285F4' }}
+                        >
+                          {(acc.name || 'G').charAt(0).toUpperCase()}
+                        </div>
+                        <div className="google-account-info">
+                          <span className="google-account-name">{acc.name}</span>
+                          <span className="google-account-email">{acc.email}</span>
+                        </div>
+                        <ArrowRight size={14} className="text-white-50" />
+                      </button>
+                    ))}
+                  </div>
 
-              <form onSubmit={handleGoogleSubmit} className="d-flex flex-column gap-2">
-                {mode === 'signup' && (
+                  <button
+                    type="button"
+                    className="btn-add-google-account mb-2"
+                    onClick={() => {
+                      setIsAddingNewAccount(true);
+                      setError(null);
+                    }}
+                    id="btn-use-another-google-account"
+                  >
+                    <UserPlus size={16} />
+                    <span>Use another Google account</span>
+                  </button>
+                </>
+              ) : (
+                /* Add Another Google Account Form */
+                <form onSubmit={handleAddCustomGoogleAccount} className="d-flex flex-column gap-2 mb-2">
                   <div>
-                    <label className="auth-label" htmlFor="google-name">Full Name</label>
+                    <label className="auth-label" htmlFor="custom-google-name">Full Name</label>
                     <div className="auth-input-wrapper">
                       <User size={16} className="auth-input-icon" />
                       <input
-                        id="google-name"
+                        id="custom-google-name"
                         type="text"
                         className="auth-input-field"
                         placeholder="e.g. Rahul Sharma"
-                        value={googleName}
-                        onChange={(e) => setGoogleName(e.target.value)}
+                        value={customGoogleName}
+                        onChange={(e) => setCustomGoogleName(e.target.value)}
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="auth-label" htmlFor="custom-google-email">Google Email Address</label>
+                    <div className="auth-input-wrapper">
+                      <Mail size={16} className="auth-input-icon" />
+                      <input
+                        id="custom-google-email"
+                        type="email"
+                        className="auth-input-field"
+                        placeholder="yourname@gmail.com"
+                        value={customGoogleEmail}
+                        onChange={(e) => setCustomGoogleEmail(e.target.value)}
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="d-flex gap-2 mt-2">
+                    <button
+                      type="submit"
+                      className="btn btn-primary flex-grow-1 d-flex align-items-center justify-content-center gap-2 py-2"
+                      style={{ fontSize: '0.86rem', fontWeight: 600, borderRadius: 'var(--radius-sm)' }}
+                      disabled={loading}
+                    >
+                      {loading ? (
+                        <>
+                          <Loader2 size={15} className="spinner-icon" />
+                          <span>Connecting...</span>
+                        </>
+                      ) : (
+                        <>
+                          <GoogleIcon size={16} />
+                          <span>Continue with Google</span>
+                        </>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary px-3 py-2"
+                      style={{ fontSize: '0.86rem', borderRadius: 'var(--radius-sm)' }}
+                      onClick={() => setIsAddingNewAccount(false)}
+                    >
+                      Back
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              <div className="google-chooser-footer">
+                To continue, Google will share your name, email address, and profile picture with CrediHire.
+              </div>
+
+              <div className="text-center mt-3 pt-2 border-top border-secondary border-opacity-25">
+                <button
+                  type="button"
+                  className="btn btn-link text-white-50 p-0 text-decoration-none"
+                  style={{ fontSize: '0.8rem' }}
+                  onClick={() => {
+                    setShowGoogleChooser(false);
+                    setIsAddingNewAccount(false);
+                    setError(null);
+                  }}
+                  id="btn-back-to-standard-auth"
+                >
+                  ← Back to standard sign in
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* Standard Sign In / Sign Up Form */
+            <>
+              {/* Google Sign In / Sign Up Action Button */}
+              <button
+                type="button"
+                className="btn-google-auth"
+                onClick={handleOpenGoogleChooser}
+                disabled={loading}
+                id="btn-google-auth"
+              >
+                <GoogleIcon size={18} />
+                <span>{mode === 'signin' ? 'Sign in with Google' : 'Sign up with Google'}</span>
+              </button>
+
+              {/* Divider: OR Continue with Email */}
+              <div className="auth-divider">
+                <div className="auth-divider-line" />
+                <span className="auth-divider-text">OR CONTINUE WITH EMAIL</span>
+                <div className="auth-divider-line" />
+              </div>
+
+              <form onSubmit={handleSubmit} className="d-flex flex-column gap-3">
+                {/* Name Field (Sign Up only) */}
+                {mode === 'signup' && (
+                  <div>
+                    <label className="auth-label" htmlFor="auth-name">Full Name</label>
+                    <div className="auth-input-wrapper">
+                      <User size={16} className="auth-input-icon" />
+                      <input
+                        id="auth-name"
+                        type="text"
+                        className="auth-input-field"
+                        placeholder="e.g. Rahul Sharma"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
                         autoComplete="name"
                         required
                       />
@@ -268,195 +395,120 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
                   </div>
                 )}
 
+                {/* Email Field */}
                 <div>
-                  <label className="auth-label" htmlFor="google-email">Google Email Address</label>
+                  <label className="auth-label" htmlFor="auth-email">Email Address</label>
                   <div className="auth-input-wrapper">
                     <Mail size={16} className="auth-input-icon" />
                     <input
-                      id="google-email"
+                      id="auth-email"
                       type="email"
                       className="auth-input-field"
-                      placeholder="yourname@gmail.com"
-                      value={googleEmail}
-                      onChange={(e) => setGoogleEmail(e.target.value)}
+                      placeholder="name@company.com or name@gmail.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
                       autoComplete="email"
                       required
                     />
                   </div>
                 </div>
 
-                <div className="d-flex gap-2 mt-2">
-                  <button
-                    type="submit"
-                    className="btn btn-primary flex-grow-1 d-flex align-items-center justify-content-center gap-2 py-2"
-                    style={{ fontSize: '0.86rem', fontWeight: 600, borderRadius: 'var(--radius-sm)' }}
-                    disabled={loading}
-                  >
-                    {loading ? (
-                      <>
-                        <Loader2 size={15} className="spinner-icon" />
-                        <span>Verifying...</span>
-                      </>
-                    ) : (
-                      <>
-                        <GoogleIcon size={16} />
-                        <span>Verify & Continue</span>
-                      </>
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-secondary px-3 py-2"
-                    style={{ fontSize: '0.86rem', borderRadius: 'var(--radius-sm)' }}
-                    onClick={() => setShowGooglePrompt(false)}
-                  >
-                    Back
-                  </button>
+                {/* Password Field */}
+                <div>
+                  <label className="auth-label mb-1" htmlFor="auth-password">Password</label>
+                  <div className="auth-input-wrapper">
+                    <Lock size={16} className="auth-input-icon" />
+                    <input
+                      id="auth-password"
+                      type={showPassword ? 'text' : 'password'}
+                      className="auth-input-field"
+                      placeholder={mode === 'signup' ? 'At least 6 characters' : 'Enter your password'}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+                      required
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-sm text-white-50 p-0 border-0 bg-transparent pe-2"
+                      onClick={() => setShowPassword(!showPassword)}
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
                 </div>
+
+                {/* Confirm Password (Sign Up only) */}
+                {mode === 'signup' && (
+                  <div>
+                    <label className="auth-label" htmlFor="auth-confirm-password">Confirm Password</label>
+                    <div className="auth-input-wrapper">
+                      <CheckCircle2 size={16} className="auth-input-icon" />
+                      <input
+                        id="auth-confirm-password"
+                        type={showPassword ? 'text' : 'password'}
+                        className="auth-input-field"
+                        placeholder="Repeat your password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        autoComplete="new-password"
+                        required
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Submit Button */}
+                <button
+                  type="submit"
+                  className="btn-auth-submit mt-2"
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 size={16} className="spinner-icon" />
+                      <span>Processing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>{mode === 'signin' ? 'Sign In with Email' : 'Create Account'}</span>
+                      <ArrowRight size={16} />
+                    </>
+                  )}
+                </button>
               </form>
-            </div>
+
+              {/* Switch Tab Footer */}
+              <div className="text-center mt-3 pt-2 border-top border-secondary border-opacity-25" style={{ fontSize: '0.82rem', color: '#94a3b8' }}>
+                {mode === 'signin' ? (
+                  <span>
+                    Don't have an account yet?{' '}
+                    <button
+                      type="button"
+                      className="btn btn-link text-primary p-0 text-decoration-none fw-semibold"
+                      style={{ fontSize: '0.82rem' }}
+                      onClick={() => { setMode('signup'); setError(null); }}
+                    >
+                      Create one free
+                    </button>
+                  </span>
+                ) : (
+                  <span>
+                    Already have an account?{' '}
+                    <button
+                      type="button"
+                      className="btn btn-link text-primary p-0 text-decoration-none fw-semibold"
+                      style={{ fontSize: '0.82rem' }}
+                      onClick={() => { setMode('signin'); setError(null); }}
+                    >
+                      Sign in here
+                    </button>
+                  </span>
+                )}
+              </div>
+            </>
           )}
-
-          {/* Divider: OR Continue with Email */}
-          <div className="auth-divider">
-            <div className="auth-divider-line" />
-            <span className="auth-divider-text">OR CONTINUE WITH EMAIL</span>
-            <div className="auth-divider-line" />
-          </div>
-
-          <form onSubmit={handleSubmit} className="d-flex flex-column gap-3">
-            {/* Name Field (Sign Up only) */}
-            {mode === 'signup' && (
-              <div>
-                <label className="auth-label" htmlFor="auth-name">Full Name</label>
-                <div className="auth-input-wrapper">
-                  <User size={16} className="auth-input-icon" />
-                  <input
-                    id="auth-name"
-                    type="text"
-                    className="auth-input-field"
-                    placeholder="e.g. Rahul Sharma"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    autoComplete="name"
-                    required
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Email Field */}
-            <div>
-              <label className="auth-label" htmlFor="auth-email">Email Address</label>
-              <div className="auth-input-wrapper">
-                <Mail size={16} className="auth-input-icon" />
-                <input
-                  id="auth-email"
-                  type="email"
-                  className="auth-input-field"
-                  placeholder="name@company.com or name@gmail.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  autoComplete="email"
-                  required
-                />
-              </div>
-            </div>
-
-            {/* Password Field */}
-            <div>
-              <label className="auth-label mb-1" htmlFor="auth-password">Password</label>
-              <div className="auth-input-wrapper">
-                <Lock size={16} className="auth-input-icon" />
-                <input
-                  id="auth-password"
-                  type={showPassword ? 'text' : 'password'}
-                  className="auth-input-field"
-                  placeholder={mode === 'signup' ? 'At least 6 characters' : 'Enter your password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
-                  required
-                />
-                <button
-                  type="button"
-                  className="btn btn-sm text-white-50 p-0 border-0 bg-transparent pe-2"
-                  onClick={() => setShowPassword(!showPassword)}
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                >
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </div>
-            </div>
-
-            {/* Confirm Password (Sign Up only) */}
-            {mode === 'signup' && (
-              <div>
-                <label className="auth-label" htmlFor="auth-confirm-password">Confirm Password</label>
-                <div className="auth-input-wrapper">
-                  <CheckCircle2 size={16} className="auth-input-icon" />
-                  <input
-                    id="auth-confirm-password"
-                    type={showPassword ? 'text' : 'password'}
-                    className="auth-input-field"
-                    placeholder="Repeat your password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    autoComplete="new-password"
-                    required
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Submit Button */}
-            <button
-              type="submit"
-              className="btn-auth-submit mt-2"
-              disabled={loading}
-            >
-              {loading ? (
-                <>
-                  <Loader2 size={16} className="spinner-icon" />
-                  <span>Processing...</span>
-                </>
-              ) : (
-                <>
-                  <span>{mode === 'signin' ? 'Sign In with Email' : 'Create Account'}</span>
-                  <ArrowRight size={16} />
-                </>
-              )}
-            </button>
-          </form>
-
-          {/* Switch Tab Footer */}
-          <div className="text-center mt-3 pt-2 border-top border-secondary border-opacity-25" style={{ fontSize: '0.82rem', color: '#94a3b8' }}>
-            {mode === 'signin' ? (
-              <span>
-                Don't have an account yet?{' '}
-                <button
-                  type="button"
-                  className="btn btn-link text-primary p-0 text-decoration-none fw-semibold"
-                  style={{ fontSize: '0.82rem' }}
-                  onClick={() => { setMode('signup'); setError(null); setShowGooglePrompt(false); }}
-                >
-                  Create one free
-                </button>
-              </span>
-            ) : (
-              <span>
-                Already have an account?{' '}
-                <button
-                  type="button"
-                  className="btn btn-link text-primary p-0 text-decoration-none fw-semibold"
-                  style={{ fontSize: '0.82rem' }}
-                  onClick={() => { setMode('signin'); setError(null); setShowGooglePrompt(false); }}
-                >
-                  Sign in here
-                </button>
-              </span>
-            )}
-          </div>
         </div>
       </div>
     </div>

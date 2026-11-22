@@ -14,11 +14,19 @@ from app.integrations.llm_client import LLMRateLimited, LLMUnavailable
 from app.schemas.auth import GoogleLoginRequest, LoginRequest, LoginResponse, RegisterRequest, RegisterResponse, VerifyEmailRequest, VerifyEmailResponse
 from app.schemas.chat import ChatMessageRequest, ChatMessageResponse
 from app.schemas.osint import (
+    CompanyCinRequest,
+    CompanyCinResponse,
+    DocumentMetadataRequest,
+    DocumentMetadataResponse,
     DomainIntelRequest,
     DomainIntelResponse,
     DossierPdfRequest,
+    EmailHeaderRequest,
+    EmailHeaderResponse,
     ForwardedMessageRequest,
     ForwardedMessageResponse,
+    QrCodeTrapRequest,
+    QrCodeTrapResponse,
     UpiIntelRequest,
     UpiIntelResponse,
 )
@@ -135,6 +143,38 @@ async def analyze_forwarded_message(request: ForwardedMessageRequest, service: O
         return service.analyze_forwarded_message(request)
     except Exception as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Forward analysis failed: {str(exc)}") from exc
+
+
+@router.post("/osint/email-header", response_model=EmailHeaderResponse, summary="Analyze raw email headers for SPF/DKIM/DMARC spoofing")
+async def analyze_email_header(request: EmailHeaderRequest, service: OsintService = Depends(get_osint_service)) -> EmailHeaderResponse:
+    try:
+        return service.analyze_email_header(request)
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Email header analysis failed: {str(exc)}") from exc
+
+
+@router.post("/osint/document-metadata", response_model=DocumentMetadataResponse, summary="Analyze offer letter metadata for Photoshop/Canva tampering")
+async def analyze_document_metadata(request: DocumentMetadataRequest, service: OsintService = Depends(get_osint_service)) -> DocumentMetadataResponse:
+    try:
+        return service.analyze_document_metadata(request)
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Document metadata analysis failed: {str(exc)}") from exc
+
+
+@router.post("/osint/qr-trap", response_model=QrCodeTrapResponse, summary="Scan QR payload or UPI string for reverse payment collect traps")
+async def analyze_qr_trap(request: QrCodeTrapRequest, service: OsintService = Depends(get_osint_service)) -> QrCodeTrapResponse:
+    try:
+        return service.analyze_qr_trap(request)
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"QR trap analysis failed: {str(exc)}") from exc
+
+
+@router.post("/osint/company-cin", response_model=CompanyCinResponse, summary="Verify Indian Corporate CIN and GSTIN government registration structure")
+async def analyze_company_cin(request: CompanyCinRequest, service: OsintService = Depends(get_osint_service)) -> CompanyCinResponse:
+    try:
+        return service.analyze_company_cin(request)
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Company CIN/GSTIN analysis failed: {str(exc)}") from exc
 
 
 @router.post("/scam/evidence-dossier/pdf", summary="Generate official Cybercrime Evidence Dossier PDF")

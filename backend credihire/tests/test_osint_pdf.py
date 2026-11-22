@@ -3,9 +3,13 @@ from fastapi.testclient import TestClient
 
 from app.main import create_app
 from app.schemas.osint import (
+    CompanyCinRequest,
+    DocumentMetadataRequest,
     DomainIntelRequest,
     DossierPdfRequest,
+    EmailHeaderRequest,
     ForwardedMessageRequest,
+    QrCodeTrapRequest,
     UpiIntelRequest,
 )
 from app.services.evidence_pdf import EvidencePdfGenerator
@@ -124,3 +128,106 @@ def test_osint_api_endpoints_work(client):
     assert pdf_resp.status_code == 200
     assert pdf_resp.headers["content-type"] == "application/pdf"
     assert pdf_resp.content.startswith(b"%PDF")
+
+
+def test_email_header_spoofing_detection():
+    service = OsintService()
+    raw_header = """From: "TCS Global HR" <careers@tcs.com>
+Return-Path: <scammer123@free-mailer-host.ru>
+Received: from mail.free-mailer-host.ru [185.220.101.5]
+Received-SPF: fail (google.com: domain of tcs.com does not designate 185.220.101.5 as permitted sender)
+Authentication-Results: mx.google.com;
+       dkim=fail header.i=@tcs.com;
+       spf=fail (google.com: domain of tcs.com does not designate 185.220.101.5) smtp.mailfrom=tcs.com;
+       dmarc=fail (p=REJECT sp=REJECT dis=REJECT) header.from=tcs.com"""
+
+    result = service.analyze_email_header(EmailHeaderRequest(raw_header=raw_header))
+    assert result.is_spoofed is True
+    assert result.spf_status == "fail"
+    assert result.dkim_status == "fail"
+    assert result.dmarc_status == "fail"
+    assert result.risk_score >= 80
+    assert result.risk_level in ["high", "critical"]
+    assert any("SPF_VALIDATION_FAILED" in f["code"] for f in result.flags)
+
+
+def test_document_metadata_canva_photoshop_detection():
+    service = OsintService()
+    result = service.analyze_document_metadata(DocumentMetadataRequest(
+        file_name="Tata_Motors_Appointment_Letter.pdf",
+        text_content="Creator: Canva Web Design. Selected candidate must pay ₹5000 registration fee for laptop dispatch.",
+    ))
+    assert result.is_tampered_or_canva is True
+    assert result.software_tool == "Canva Design Platform"
+    assert result.risk_score >= 85
+    assert result.risk_level in ["high", "critical"]
+    assert any("CANVA_DESIGN_TEMPLATE" in f["code"] for f in result.forensic_findings)
+
+
+def test_qr_trap_reverse_payment_detection():
+    service = OsintService()
+    result = service.analyze_qr_trap(QrCodeTrapRequest(
+        qr_payload_or_uri="upi://pay?pa=hr.recruit78@paytm&pn=Amazon%20HR&am=2500&cu=INR",
+        context_text="Scan this QR code to receive your registration bonus of 2500 rs",
+    ))
+    assert result.is_upi_scheme is True
+    assert result.is_debit_trap is True
+    assert result.vpa_payee == "hr.recruit78@paytm"
+    assert result.demanded_amount == "₹2500"
+    assert result.risk_score >= 85
+    assert any("REVERSE_PAYMENT_QR_TRAP" in d["code"] for d in result.deception_indicators)
+
+
+def test_company_cin_and_gstin_validation():
+    service = OsintService()
+    # 1. Valid Infosys-like CIN (IT Services, Karnataka, 1981, Public Ltd)
+    cin_res = service.analyze_company_cin(CompanyCinRequest(cin_or_gstin="L72200KA1981PLC013115"))
+    assert cin_res.is_valid_format is True
+    assert cin_res.id_type == "CIN"
+    assert cin_res.state_code == "KA"
+    assert cin_res.incorporation_year == 1981
+    assert cin_res.risk_score <= 25
+
+    # 2. Invalid fake registration number
+    fake_res = service.analyze_company_cin(CompanyCinRequest(cin_or_gstin="FAKE-REG-123456"))
+    assert fake_res.is_valid_format is False
+    assert fake_res.id_type == "INVALID"
+    assert fake_res.risk_score >= 70
+
+    # 3. Valid GSTIN (Delhi, Company)
+    gst_res = service.analyze_company_cin(CompanyCinRequest(cin_or_gstin="07AAAAA0000A1Z5"))
+    assert gst_res.is_valid_format is True
+    assert gst_res.id_type == "GSTIN"
+    assert gst_res.state_code == "07"
+
+
+def test_advanced_osint_api_endpoints_work(client):
+    # 1. Email Header
+    email_resp = client.post("/api/v1/osint/email-header", json={
+        "raw_header": "From: test@tcs.com\nReceived-SPF: fail\ndkim=fail\ndmarc=fail"
+    })
+    assert email_resp.status_code == 200
+    assert email_resp.json()["is_spoofed"] is True
+
+    # 2. Document Metadata
+    doc_resp = client.post("/api/v1/osint/document-metadata", json={
+        "file_name": "TCS_Offer.pdf",
+        "text_content": "Created with Canva graphic tool. Pay fee."
+    })
+    assert doc_resp.status_code == 200
+    assert doc_resp.json()["is_tampered_or_canva"] is True
+
+    # 3. QR Trap
+    qr_resp = client.post("/api/v1/osint/qr-trap", json={
+        "qr_payload_or_uri": "upi://pay?pa=recruiter@okhdfcbank&pn=HR&am=1000",
+        "context_text": "Scan to receive refund"
+    })
+    assert qr_resp.status_code == 200
+    assert qr_resp.json()["is_debit_trap"] is True
+
+    # 4. Company CIN
+    cin_resp = client.post("/api/v1/osint/company-cin", json={
+        "cin_or_gstin": "L72200KA1981PLC013115"
+    })
+    assert cin_resp.status_code == 200
+    assert cin_resp.json()["is_valid_format"] is True

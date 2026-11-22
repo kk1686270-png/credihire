@@ -72,3 +72,69 @@ export async function downloadEvidenceDossierPdf(dossierPayload, apiBaseUrl) {
   window.URL.revokeObjectURL(downloadUrl);
   return true;
 }
+
+export async function analyzeEmailHeader(rawHeader, apiBaseUrl) {
+  const base = getApiBaseUrl(apiBaseUrl);
+  const response = await fetch(`${base}/osint/email-header`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ raw_header: rawHeader.trim() }),
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Email header analysis failed with status ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function analyzeDocumentMetadata({ fileName, fileBytesBase64 = null, textContent = null }, apiBaseUrl) {
+  const base = getApiBaseUrl(apiBaseUrl);
+  const response = await fetch(`${base}/osint/document-metadata`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      file_name: fileName,
+      file_bytes_base64: fileBytesBase64,
+      text_content: textContent,
+    }),
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Document metadata analysis failed with status ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function analyzeQrTrap(qrPayloadOrUri, contextText = '', apiBaseUrl) {
+  const base = getApiBaseUrl(apiBaseUrl);
+  const response = await fetch(`${base}/osint/qr-trap`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      qr_payload_or_uri: qrPayloadOrUri.trim(),
+      context_text: contextText ? contextText.trim() : null,
+    }),
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || `QR trap analysis failed with status ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function analyzeCompanyCin(cinOrGstin, companyNameClaimed = '', apiBaseUrl) {
+  const base = getApiBaseUrl(apiBaseUrl);
+  const response = await fetch(`${base}/osint/company-cin`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      cin_or_gstin: cinOrGstin.trim().toUpperCase(),
+      company_name_claimed: companyNameClaimed ? companyNameClaimed.trim() : null,
+    }),
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Company CIN/GSTIN analysis failed with status ${response.status}`);
+  }
+  return response.json();
+}

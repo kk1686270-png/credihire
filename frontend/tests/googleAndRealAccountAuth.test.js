@@ -8,6 +8,8 @@ import {
   validateGoogleAccountEmail, 
   validateRealName, 
   validateRealPassword,
+  validateGoogleClientId,
+  isValidGoogleClientId,
   DISPOSABLE_OR_TEST_DOMAINS 
 } from '../src/utils/validation.js';
 
@@ -134,3 +136,37 @@ test('AuthContext exports loginWithGoogle and validates real Google accounts', (
   assert.ok(content.includes('validateRealName'), 'AuthContext imports validateRealName');
   assert.ok(content.includes('provider: \'google\''), 'Tags Google accounts with provider: google');
 });
+
+test('validateGoogleClientId accepts valid Google OAuth Web Client IDs', () => {
+  const validIds = [
+    '123456789012-abcdefghijklmnopqrstuvwxyz123456.apps.googleusercontent.com',
+    '987654321-foo_bar.apps.googleusercontent.com'
+  ];
+
+  for (const id of validIds) {
+    const res = validateGoogleClientId(id);
+    assert.strictEqual(res.isValid, true, `Should accept valid Client ID: ${id}`);
+    assert.strictEqual(res.error, null);
+    assert.strictEqual(isValidGoogleClientId(id), true);
+  }
+});
+
+test('validateGoogleClientId rejects project IDs, empty values, and malformed strings', () => {
+  const invalidIds = [
+    '',
+    '   ',
+    'credihire-project-12345', // Project ID, not OAuth Client ID
+    'my-project',
+    'AIzaSyD-dummy-api-key', // API Key, not Client ID
+    'abcdef.apps.googleusercontent.com', // Missing project number prefix
+    '123456789.com' // Not .apps.googleusercontent.com
+  ];
+
+  for (const id of invalidIds) {
+    const res = validateGoogleClientId(id);
+    assert.strictEqual(res.isValid, false, `Should reject invalid Client ID: ${id}`);
+    assert.ok(res.error, 'Must provide informative error');
+    assert.strictEqual(isValidGoogleClientId(id), false);
+  }
+});
+

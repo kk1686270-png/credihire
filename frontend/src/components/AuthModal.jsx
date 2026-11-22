@@ -11,10 +11,14 @@ import {
   CheckCircle2, 
   AlertCircle,
   Loader2,
-  Key
+  Key,
+  HelpCircle,
+  RotateCcw,
+  ExternalLink
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { loadGoogleIdentityServices } from '../utils/googleIdentity.js';
+import { validateGoogleClientId, isValidGoogleClientId } from '../utils/validation.js';
 
 function GoogleIcon({ size = 18 }) {
   return (
@@ -40,6 +44,7 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
   
   // Real Google OAuth Setup state
   const [showGoogleSetup, setShowGoogleSetup] = useState(false);
+  const [showSetupGuide, setShowSetupGuide] = useState(false);
   const [customClientId, setCustomClientId] = useState('');
 
   const googleButtonRef = useRef(null);
@@ -48,6 +53,29 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
   modeRef.current = mode;
 
   const { login, signup, loginWithGoogle, showToast } = useAuth();
+
+  const getEffectiveGoogleClientId = () => {
+    const envId = (import.meta.env.VITE_GOOGLE_CLIENT_ID || '').trim();
+    if (isValidGoogleClientId(envId)) {
+      return envId;
+    }
+
+    if (typeof localStorage !== 'undefined') {
+      const storedId = (localStorage.getItem('credihire_google_client_id') || '').trim();
+      if (isValidGoogleClientId(storedId)) {
+        return storedId;
+      }
+      if (storedId) {
+        // Automatically purge invalid, malformed, or project IDs (prevents Error 401: invalid_client)
+        try {
+          localStorage.removeItem('credihire_google_client_id');
+        } catch {}
+      }
+    }
+    return '';
+  };
+
+  const [configuredClientId, setConfiguredClientId] = useState(() => getEffectiveGoogleClientId());
 
   googleHandlerRef.current = async (credential) => {
     if (loading) return;
@@ -64,14 +92,6 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
     }
   };
 
-  const getEffectiveGoogleClientId = () => {
-    return (
-      import.meta.env.VITE_GOOGLE_CLIENT_ID ||
-      (typeof localStorage !== 'undefined' ? localStorage.getItem('credihire_google_client_id') : '') ||
-      ''
-    ).trim();
-  };
-
   // Synchronize mode with initialMode whenever modal opens
   useEffect(() => {
     if (isOpen) {
@@ -81,14 +101,16 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
       setPendingVerification(null);
       setShowPassword(false);
       setShowGoogleSetup(false);
+      setShowSetupGuide(false);
+      setConfiguredClientId(getEffectiveGoogleClientId());
     }
   }, [isOpen, initialMode]);
 
-  // Load Google Identity Services if a Client ID is configured
+  // Load Google Identity Services if a valid Client ID is configured
   useEffect(() => {
     if (!isOpen || pendingVerification) return undefined;
     let active = true;
-    const clientId = getEffectiveGoogleClientId();
+    const clientId = configuredClientId || getEffectiveGoogleClientId();
     if (!clientId) {
       return undefined;
     }
@@ -98,7 +120,14 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
         if (!active || !googleButtonRef.current) return;
         google.accounts.id.initialize({
           client_id: clientId,
-          callback: (response) => googleHandlerRef.current?.(response.credential)
+          callback: (response) => googleHandlerRef.current?.(response.credential),
+          error_callback: (gisError) => {
+            console.warn("GIS Error callback:", gisError);
+            if (gisError?.type === 'popup_closed_by_user') return;
+            setError(
+              'Google authorization error (Error 401: invalid_client). Verify this is a "Web application" Client ID and "http://localhost:5173" is added under Authorized JavaScript origins in Google Cloud Console.'
+            );
+          }
         });
         googleButtonRef.current.replaceChildren();
         google.accounts.id.renderButton(googleButtonRef.current, {
@@ -114,7 +143,7 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
       });
 
     return () => { active = false; };
-  }, [isOpen, pendingVerification, mode]);
+  }, [isOpen, pendingVerification, mode, configuredClientId]);
 
   if (!isOpen) return null;
 
@@ -125,6 +154,7 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
     setConfirmPassword('');
     setPendingVerification(null);
     setShowGoogleSetup(false);
+    setShowSetupGuide(false);
     setError(null);
   };
 
@@ -135,7 +165,7 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
 
   const handleLaunchGoogleSignIn = async () => {
     setError(null);
-    const clientId = getEffectiveGoogleClientId();
+    const clientId = configuredClientId || getEffectiveGoogleClientId();
 
     if (!clientId) {
       // Prompt user to provide their Google Cloud OAuth Client ID for live connection
@@ -148,7 +178,14 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
       const google = await loadGoogleIdentityServices();
       google.accounts.id.initialize({
         client_id: clientId,
-        callback: (response) => googleHandlerRef.current?.(response.credential)
+        callback: (response) => googleHandlerRef.current?.(response.credential),
+        error_callback: (gisError) => {
+          console.warn("GIS Error prompt:", gisError);
+          if (gisError?.type === 'popup_closed_by_user') return;
+          setError(
+            'Google Sign-In blocked (Error 401). Ensure your Client ID ends in ".apps.googleusercontent.com" and "http://localhost:5173" is added to Authorized JavaScript origins.'
+          );
+        }
       });
       google.accounts.id.prompt();
     } catch (err) {
@@ -160,27 +197,52 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
 
   const handleSaveClientIdAndLaunch = async (e) => {
     e.preventDefault();
-    const cleanId = customClientId.trim();
-    if (!cleanId) {
-      setError('Please paste a valid Google OAuth Client ID.');
+    setError(null);
+
+    const validation = validateGoogleClientId(customClientId);
+    if (!validation.isValid) {
+      setError(validation.error);
       return;
     }
 
+    const cleanId = validation.clientId;
+
     try {
       localStorage.setItem('credihire_google_client_id', cleanId);
+      setConfiguredClientId(cleanId);
       setShowGoogleSetup(false);
       setLoading(true);
 
       const google = await loadGoogleIdentityServices();
       google.accounts.id.initialize({
         client_id: cleanId,
-        callback: (response) => googleHandlerRef.current?.(response.credential)
+        callback: (response) => googleHandlerRef.current?.(response.credential),
+        error_callback: (gisError) => {
+          console.warn("GIS Error setup:", gisError);
+          if (gisError?.type === 'popup_closed_by_user') return;
+          setError(
+            'Google Sign-In blocked (Error 401: invalid_client). Ensure this Web Client ID has "http://localhost:5173" listed in Authorized JavaScript origins in Google Cloud Console.'
+          );
+        }
       });
       google.accounts.id.prompt();
     } catch (err) {
       setError(err.message || 'Failed to initialize Google Sign-In with provided Client ID.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleClearClientId = () => {
+    try {
+      localStorage.removeItem('credihire_google_client_id');
+    } catch {}
+    setConfiguredClientId('');
+    setCustomClientId('');
+    setShowGoogleSetup(false);
+    setError(null);
+    if (showToast) {
+      showToast('Saved Google Client ID has been removed.', 'info');
     }
   };
 
@@ -220,7 +282,7 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
     }
   };
 
-  const effectiveClientId = getEffectiveGoogleClientId();
+  const effectiveClientId = configuredClientId || getEffectiveGoogleClientId();
 
   return (
     <div className="modal-overlay" onClick={handleClose} role="dialog" aria-modal="true">
@@ -308,7 +370,7 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
             </div>
           ) : (
             <>
-              {/* Google Setup Card if user clicked Google but Client ID is needed */}
+              {/* Google Setup Card if user clicked Google but Client ID is needed or wants to reconfigure */}
               {showGoogleSetup && (
                 <div className="p-3 mb-3 rounded" style={{ background: 'rgba(66, 133, 244, 0.08)', border: '1px solid rgba(66, 133, 244, 0.35)' }}>
                   <div className="d-flex align-items-center justify-content-between mb-2">
@@ -324,29 +386,46 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
                       Cancel
                     </button>
                   </div>
-                  <p className="text-white-50 mb-3" style={{ fontSize: '0.78rem' }}>
-                    To open Google's authentic sign-in popup directly from Google servers, please enter your Google OAuth Client ID:
+                  
+                  <p className="text-white-50 mb-2" style={{ fontSize: '0.78rem' }}>
+                    Google OAuth requires an official Web Client ID ending in <code>.apps.googleusercontent.com</code>. 
+                    Do not enter a Project ID or API key (which causes <em>Error 401: invalid_client</em>).
                   </p>
-                  <form onSubmit={handleSaveClientIdAndLaunch} className="d-flex flex-column gap-2">
+
+                  <form onSubmit={handleSaveClientIdAndLaunch} className="d-flex flex-column gap-2 mb-2">
                     <div className="auth-input-wrapper">
                       <Key size={15} className="auth-input-icon" />
                       <input
                         type="text"
                         className="auth-input-field"
-                        placeholder="e.g. 123456789-abc.apps.googleusercontent.com"
+                        placeholder="e.g. 123456789-xyz.apps.googleusercontent.com"
                         value={customClientId}
                         onChange={(e) => setCustomClientId(e.target.value)}
                         required
                       />
                     </div>
-                    <div className="d-flex gap-2 mt-1">
+
+                    <div className="d-flex gap-2 mt-1 flex-wrap">
                       <button
                         type="submit"
                         className="btn btn-primary btn-sm flex-grow-1 py-2 fw-semibold"
                         disabled={loading}
                       >
-                        {loading ? 'Connecting...' : 'Launch Google Sign-In'}
+                        {loading ? 'Connecting...' : 'Save & Launch Google Sign-In'}
                       </button>
+
+                      {effectiveClientId && (
+                        <button
+                          type="button"
+                          className="btn btn-outline-danger btn-sm px-2 d-flex align-items-center gap-1"
+                          onClick={handleClearClientId}
+                          title="Remove saved Client ID from browser"
+                        >
+                          <RotateCcw size={13} />
+                          <span>Clear Saved ID</span>
+                        </button>
+                      )}
+
                       <button
                         type="button"
                         className="btn btn-secondary btn-sm px-3"
@@ -356,12 +435,52 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
                       </button>
                     </div>
                   </form>
+
+                  {/* Expandable Setup Help */}
+                  <div className="pt-2 border-top border-secondary border-opacity-25">
+                    <button
+                      type="button"
+                      className="btn btn-link p-0 text-decoration-none d-flex align-items-center gap-1 text-white-50"
+                      style={{ fontSize: '0.74rem' }}
+                      onClick={() => setShowSetupGuide(!showSetupGuide)}
+                    >
+                      <HelpCircle size={13} />
+                      <span>{showSetupGuide ? 'Hide setup instructions' : 'How to get a Google Client ID in 2 minutes (Free)'}</span>
+                    </button>
+
+                    {showSetupGuide && (
+                      <ol className="text-white-50 mt-2 mb-0 ps-3" style={{ fontSize: '0.72rem', lineHeight: '1.45' }}>
+                        <li>Open <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noreferrer" className="text-info text-decoration-underline">Google Cloud Console Credentials <ExternalLink size={10} /></a>.</li>
+                        <li>Click <strong>Create Credentials</strong> ➜ <strong>OAuth client ID</strong>.</li>
+                        <li>Application type: Select <strong>Web application</strong> (NOT Desktop or Android).</li>
+                        <li>Under <strong>Authorized JavaScript origins</strong>, add: <code>http://localhost:5173</code> and <code>http://localhost</code>.</li>
+                        <li>Copy the generated <strong>Client ID</strong> (ends in <code>.apps.googleusercontent.com</code>) and paste it above!</li>
+                      </ol>
+                    )}
+                  </div>
                 </div>
               )}
 
               {/* Real Google Sign In / Sign Up Button */}
               {effectiveClientId ? (
-                <div className="google-signin-button d-flex justify-content-center mb-3" ref={googleButtonRef} id="btn-google-auth" />
+                <div className="mb-3">
+                  <div className="google-signin-button d-flex justify-content-center mb-1" ref={googleButtonRef} id="btn-google-auth" />
+                  <div className="d-flex justify-content-center align-items-center gap-2">
+                    <span style={{ fontSize: '0.72rem', color: '#64748b' }}>Google OAuth active</span>
+                    <span style={{ color: '#475569' }}>•</span>
+                    <button
+                      type="button"
+                      className="btn btn-link p-0 text-decoration-none"
+                      style={{ fontSize: '0.72rem', color: '#60a5fa' }}
+                      onClick={() => {
+                        setCustomClientId(effectiveClientId);
+                        setShowGoogleSetup(true);
+                      }}
+                    >
+                      Change or Reset Client ID
+                    </button>
+                  </div>
+                </div>
               ) : (
                 <button
                   type="button"

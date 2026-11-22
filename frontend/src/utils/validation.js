@@ -321,5 +321,54 @@ export function validateRealPassword(password) {
   };
 }
 
+/**
+ * Validates Google OAuth Client ID format.
+ * Valid Google OAuth Web Client IDs look like:
+ * 123456789012-abcdefghijklmnopqrstuvwxyz123456.apps.googleusercontent.com
+ * Must contain project number, hyphen, alphanumeric hash, and end with .apps.googleusercontent.com
+ */
+export function validateGoogleClientId(clientId) {
+  if (!clientId || typeof clientId !== 'string') {
+    return {
+      isValid: false,
+      error: 'Please enter your Google OAuth Client ID.'
+    };
+  }
+
+  const clean = clientId.trim();
+  if (!clean) {
+    return {
+      isValid: false,
+      error: 'Google OAuth Client ID cannot be empty.'
+    };
+  }
+
+  if (!clean.endsWith('.apps.googleusercontent.com')) {
+    return {
+      isValid: false,
+      error: 'Invalid format. Google OAuth Client ID must end with ".apps.googleusercontent.com" (e.g. 123456789-xyz.apps.googleusercontent.com). Do not enter your Project ID or API Key.'
+    };
+  }
+
+  const parts = clean.split('-');
+  if (parts.length < 2 || !/^\d+$/.test(parts[0])) {
+    return {
+      isValid: false,
+      error: 'Google OAuth Client ID must start with your Google Cloud Project Number (digits) followed by a hyphen.'
+    };
+  }
+
+  return {
+    isValid: true,
+    error: null,
+    clientId: clean
+  };
+}
+
+export function isValidGoogleClientId(clientId) {
+  return validateGoogleClientId(clientId).isValid;
+}
+
+
 
 

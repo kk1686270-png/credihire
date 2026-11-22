@@ -41,3 +41,25 @@ export function loadGoogleIdentityServices() {
 
   return googleScriptPromise;
 }
+
+/**
+ * Builds the official Google OAuth 2.0 redirect URL with login_hint.
+ * When emailHint is provided, Google immediately prompts that specific account on their phone.
+ */
+export function getGoogleOAuthRedirectUrl({ clientId, emailHint = '', redirectUri = '' }) {
+  const base = 'https://accounts.google.com/o/oauth2/v2/auth';
+  const uri = redirectUri || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173');
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: uri,
+    response_type: 'id_token token',
+    scope: 'openid email profile',
+    nonce: Math.random().toString(36).substring(2),
+    prompt: 'consent'
+  });
+  if (emailHint) {
+    params.set('login_hint', emailHint.trim().toLowerCase());
+  }
+  return `${base}?${params.toString()}`;
+}
+

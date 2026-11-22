@@ -75,6 +75,23 @@ export function AuthProvider({ children }) {
     }
   }, [user]);
 
+  // Handle Google OAuth 2.0 redirect tokens (e.g. #id_token=...)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const hash = window.location.hash;
+    if (hash && (hash.includes('id_token=') || hash.includes('access_token='))) {
+      const params = new URLSearchParams(hash.substring(1));
+      const idToken = params.get('id_token');
+      if (idToken) {
+        loginWithGoogle(idToken).then(() => {
+          window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        }).catch(err => {
+          console.warn("Google OAuth redirect token error:", err);
+        });
+      }
+    }
+  }, []);
+
   const showToast = (msg, type = 'info') => {
     const payload = typeof msg === 'string' ? { message: msg, type } : msg;
     setToastMessage(payload);

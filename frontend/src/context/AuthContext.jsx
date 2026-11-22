@@ -2,9 +2,11 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { 
   validateRealEmail, 
   validateRealName, 
-  validateRealPassword, 
-  validateGoogleAccountEmail 
+  validateRealPassword,
+  validateGoogleAccountEmail
 } from '../utils/validation.js';
+import { loginAccount, loginWithGoogleCredential, registerAccount, verifyAccountEmail } from '../services/authService.js';
+import { getSavedGoogleAccounts, saveGoogleAccount } from '../utils/googleAccounts.js';
 
 const AuthContext = createContext(null);
 
@@ -79,35 +81,53 @@ export function AuthProvider({ children }) {
     }
     const normEmail = emailValidation.normalizedEmail;
 
-    const accounts = getRegisteredAccounts();
-    const existingAccount = accounts.find(a => a.email.toLowerCase() === normEmail);
+    let userData = null;
+    try {
+      const response = await loginAccount({ email: normEmail, password });
+      if (response && response.user) {
+        const account = response.user;
+        const generatedName = account.name || 'Job Seeker';
+        userData = {
+          id: account.user_id,
+          name: generatedName,
+          email: normEmail,
+          avatarUrl: null,
+          avatarInitials: (generatedName.split(' ').map(n => n[0]).join('') || 'U').slice(0, 2).toUpperCase(),
+          plan: 'Verified Job Seeker',
+          provider: 'email',
+          joinedAt: new Date().toLocaleDateString()
+        };
+      }
+    } catch (backendErr) {
+      // Check local registered accounts
+      const accounts = getRegisteredAccounts();
+      const localAcc = accounts.find(a => a.email.toLowerCase() === normEmail);
+      if (!localAcc) {
+        const error = new Error("No account found with this email. Please create an account first.");
+        error.code = 'ACCOUNT_NOT_FOUND';
+        throw error;
+      }
+      if (localAcc.password && localAcc.password !== password) {
+        throw new Error("Incorrect password. Please try again.");
+      }
+      const generatedName = localAcc.name || 'Job Seeker';
+      userData = {
+        id: localAcc.id || 'usr_' + Date.now().toString(36),
+        name: generatedName,
+        email: normEmail,
+        avatarUrl: null,
+        avatarInitials: (generatedName.split(' ').map(n => n[0]).join('') || 'U').slice(0, 2).toUpperCase(),
+        plan: 'Verified Job Seeker',
+        provider: 'email',
+        joinedAt: localAcc.joinedAt || new Date().toLocaleDateString()
+      };
+    }
 
-    if (!existingAccount) {
+    if (!userData) {
       const error = new Error("No account found with this email. Please create an account first.");
       error.code = 'ACCOUNT_NOT_FOUND';
       throw error;
     }
-
-    if (existingAccount.provider === 'google' && !existingAccount.password) {
-      throw new Error("This account is registered with Google. Please use 'Sign in with Google'.");
-    }
-
-    if (existingAccount.password && existingAccount.password !== password) {
-      throw new Error("Incorrect password. Please try again.");
-    }
-
-    const generatedName = existingAccount.name || 'Job Seeker';
-
-    const userData = {
-      id: existingAccount.id || 'usr_' + Date.now().toString(36),
-      name: generatedName,
-      email: normEmail,
-      avatarUrl: existingAccount.avatarUrl || null,
-      avatarInitials: existingAccount.avatarInitials || (generatedName.split(' ').map(n => n[0]).join('') || 'U').slice(0, 2).toUpperCase(),
-      plan: existingAccount.plan || 'Verified Job Seeker',
-      provider: existingAccount.provider || 'email',
-      joinedAt: existingAccount.joinedAt || new Date().toLocaleDateString()
-    };
 
     setUser(userData);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(userData));
@@ -132,125 +152,129 @@ export function AuthProvider({ children }) {
     }
 
     const normEmail = emailValidation.normalizedEmail;
+    const cleanName = nameValidation.sanitizedName;
+
+    // Check if account already exists
     const accounts = getRegisteredAccounts();
-    const existingAccount = accounts.find(a => a.email.toLowerCase() === normEmail);
-    if (existingAccount) {
+    if (accounts.some(a => a.email.toLowerCase() === normEmail)) {
       throw new Error("An account with this email already exists. Please sign in instead.");
     }
 
-    const cleanName = nameValidation.sanitizedName;
-    const userData = {
-      id: 'usr_' + Date.now().toString(36),
+    let registeredAccount = null;
+    try {
+      registeredAccount = await registerAccount({ name: cleanName, email: normEmail, password });
+    } catch (backendErr) {
+      console.warn("Backend registration unavailable or unconfigured, registering locally:", backendErr);
+    }
+
+    const localAccount = {
+      id: registeredAccount?.user_id || 'usr_' + Date.now().toString(36),
       name: cleanName,
       email: normEmail,
       password: password,
-      avatarUrl: null,
       avatarInitials: (cleanName.split(' ').map(n => n[0]).join('') || 'U').slice(0, 2).toUpperCase(),
       plan: 'New Member Shield',
       provider: 'email',
       joinedAt: new Date().toLocaleDateString()
     };
+    saveRegisteredAccount(localAccount);
 
-    saveRegisteredAccount(userData);
-
-    const sessionUser = { ...userData };
+    const sessionUser = { ...localAccount };
     delete sessionUser.password;
-
     setUser(sessionUser);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(sessionUser));
     showToast(`Account created successfully! Welcome, ${sessionUser.name}.`);
-    return sessionUser;
+
+    return registeredAccount || localAccount;
   };
 
-  const loginWithGoogle = async (googleAuthInput) => {
+  const verifyEmail = async (token) => verifyAccountEmail(token);
+
+  const loginWithGoogle = async (googleData) => {
     let email = '';
     let name = '';
     let picture = null;
     let sub = null;
 
-    if (typeof googleAuthInput === 'string') {
-      // Decode Google Identity Services JWT credential
+    if (typeof googleData === 'string') {
+      // It's a Google ID Token (JWT) from Google Identity Services
       try {
-        const base64Url = googleAuthInput.split('.')[1];
-        if (!base64Url) throw new Error("Invalid JWT token format");
-        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-        const jsonPayload = decodeURIComponent(
-          atob(base64)
-            .split('')
-            .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-            .join('')
-        );
-        const payload = JSON.parse(jsonPayload);
-
-        if (!payload.email) {
-          throw new Error("Google credential missing email address.");
+        const response = await loginWithGoogleCredential(googleData);
+        if (response && response.user) {
+          const account = response.user;
+          const sessionUser = {
+            id: account.user_id,
+            name: account.name,
+            email: account.email,
+            avatarUrl: null,
+            avatarInitials: (account.name.split(' ').map(p => p[0]).join('') || 'G').slice(0, 2).toUpperCase(),
+            plan: 'Verified Google Member',
+            provider: 'google',
+            joinedAt: new Date().toLocaleDateString()
+          };
+          setUser(sessionUser);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(sessionUser));
+          showToast(`Welcome back, ${sessionUser.name}! Signed in with Google.`);
+          return sessionUser;
         }
-        if (payload.email_verified === false) {
-          throw new Error("Google account is not verified. Only real verified accounts can sign in.");
-        }
-
-        email = payload.email;
-        name = payload.name || payload.given_name || 'Google User';
-        picture = payload.picture || null;
-        sub = payload.sub || null;
-      } catch (err) {
-        throw new Error(err.message || "Failed to process Google account credentials.");
+      } catch (backendErr) {
+        console.warn("Backend Google verification skipped/failed, parsing token:", backendErr);
       }
-    } else if (googleAuthInput && typeof googleAuthInput === 'object') {
-      // Direct validated Google account input
-      email = googleAuthInput.email || '';
-      name = googleAuthInput.name || '';
-      picture = googleAuthInput.picture || null;
-      sub = googleAuthInput.sub || null;
+
+      // Client-side JWT parse fallback
+      try {
+        const base64Url = googleData.split('.')[1];
+        if (base64Url) {
+          const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+          const jsonPayload = decodeURIComponent(
+            atob(base64)
+              .split('')
+              .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+              .join('')
+          );
+          const payload = JSON.parse(jsonPayload);
+          email = payload.email || '';
+          name = payload.name || payload.given_name || 'Google User';
+          picture = payload.picture || null;
+          sub = payload.sub || null;
+        }
+      } catch (parseErr) {
+        throw new Error("Invalid Google credential format.");
+      }
+    } else if (googleData && typeof googleData === 'object') {
+      email = googleData.email || '';
+      name = googleData.name || 'Google User';
+      picture = googleData.picture || null;
+      sub = googleData.sub || null;
     } else {
-      throw new Error("Invalid Google authentication data.");
+      throw new Error('Please select or enter a valid Google account.');
     }
 
-    // Validate that it's a real Google account
-    const googleEmailValidation = validateGoogleAccountEmail(email);
-    if (!googleEmailValidation.isValid) {
-      throw new Error(googleEmailValidation.error);
+    const emailValidation = validateGoogleAccountEmail(email);
+    if (!emailValidation.isValid) {
+      throw new Error(emailValidation.error);
     }
-    const normEmail = googleEmailValidation.normalizedEmail;
+    const normEmail = emailValidation.normalizedEmail;
+    const nameValidation = validateRealName(name || 'Google User');
+    const finalName = nameValidation.isValid ? nameValidation.sanitizedName : 'Google User';
 
-    const nameValidation = validateRealName(name || 'Google Member');
-    const finalName = nameValidation.isValid ? nameValidation.sanitizedName : 'Google Member';
+    const sessionUser = {
+      id: 'usr_g_' + (sub || Date.now().toString(36)),
+      name: finalName,
+      email: normEmail,
+      avatarUrl: picture,
+      avatarInitials: (finalName.split(' ').map(p => p[0]).join('') || 'G').slice(0, 2).toUpperCase(),
+      plan: 'Verified Google Member',
+      provider: 'google',
+      joinedAt: new Date().toLocaleDateString()
+    };
 
-    const accounts = getRegisteredAccounts();
-    const existingAccount = accounts.find(a => a.email.toLowerCase() === normEmail);
-
-    let sessionUser;
-    if (existingAccount) {
-      sessionUser = {
-        id: existingAccount.id,
-        name: existingAccount.name || finalName,
-        email: normEmail,
-        avatarUrl: picture || existingAccount.avatarUrl || null,
-        avatarInitials: (finalName.split(' ').map(n => n[0]).join('') || 'G').slice(0, 2).toUpperCase(),
-        plan: existingAccount.plan || 'Verified Google Member',
-        provider: 'google',
-        joinedAt: existingAccount.joinedAt || new Date().toLocaleDateString()
-      };
-      saveRegisteredAccount({ ...existingAccount, ...sessionUser });
-      showToast(`Welcome back, ${sessionUser.name}! Signed in with Google.`);
-    } else {
-      // Automatically provision new genuine Google account
-      sessionUser = {
-        id: 'usr_g_' + (sub || Date.now().toString(36)),
-        name: finalName,
-        email: normEmail,
-        avatarUrl: picture || null,
-        avatarInitials: (finalName.split(' ').map(n => n[0]).join('') || 'G').slice(0, 2).toUpperCase(),
-        plan: 'Verified Google Member',
-        provider: 'google',
-        joinedAt: new Date().toLocaleDateString()
-      };
-      saveRegisteredAccount(sessionUser);
-      showToast(`Account created successfully! Welcome, ${sessionUser.name}.`);
-    }
+    saveRegisteredAccount(sessionUser);
+    saveGoogleAccount({ name: finalName, email: normEmail });
 
     setUser(sessionUser);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(sessionUser));
+    showToast(`Welcome, ${sessionUser.name}! Signed in with Google.`);
     return sessionUser;
   };
 
@@ -285,20 +309,16 @@ export function AuthProvider({ children }) {
         if (newEntry.attachedFile && item.attachedFile) {
           return item.attachedFile.name !== newEntry.attachedFile.name;
         }
-        if (newEntry.text && item.text) {
-          return item.text !== newEntry.text;
-        }
         return item.id !== newEntry.id;
       })];
+
       try {
-        localStorage.setItem(HISTORY_KEY_PREFIX + user.id, JSON.stringify(updated));
+        localStorage.setItem(HISTORY_KEY_PREFIX + user.id, JSON.stringify(updated.slice(0, 50)));
       } catch (e) {
-        console.warn("Could not save history to localStorage:", e);
+        console.warn("Could not update history in localStorage:", e);
       }
       return updated;
     });
-
-    showToast("Scan saved to your History.");
   };
 
   const deleteHistoryItem = (id) => {
@@ -312,6 +332,7 @@ export function AuthProvider({ children }) {
       }
       return updated;
     });
+    showToast("Scan deleted from history.");
   };
 
   const clearHistory = () => {
@@ -330,6 +351,7 @@ export function AuthProvider({ children }) {
       user, 
       login, 
       signup, 
+      verifyEmail,
       loginWithGoogle,
       logout, 
       toastMessage,

@@ -24,3 +24,13 @@ services:
         sync: false
       - key: RULE_ENGINE_FACTORY
         sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM_EMAIL
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: FRONTEND_BASE_URL
+        sync: false
+      - key: AUTH_DATABASE_PATH
+        sync: false

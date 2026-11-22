@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, 
   Mail, 
@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { getSavedGoogleAccounts, saveGoogleAccount } from '../utils/googleAccounts.js';
+import { loadGoogleIdentityServices } from '../utils/googleIdentity.js';
 
 function GoogleIcon({ size = 18 }) {
   return (
@@ -36,6 +37,7 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [pendingVerification, setPendingVerification] = useState(null);
   
   // Google Account Chooser states
   const [showGoogleChooser, setShowGoogleChooser] = useState(false);
@@ -44,19 +46,74 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
   const [customGoogleEmail, setCustomGoogleEmail] = useState('');
   const [customGoogleName, setCustomGoogleName] = useState('');
 
+  const googleButtonRef = useRef(null);
+  const googleHandlerRef = useRef(null);
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
+
   const { login, signup, loginWithGoogle, showToast } = useAuth();
+
+  googleHandlerRef.current = async (credential) => {
+    if (loading) return;
+    setError(null);
+    setLoading(true);
+    try {
+      await loginWithGoogle(credential);
+      resetForm();
+      onClose();
+    } catch (err) {
+      setError(err.message || 'Google sign-in failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Synchronize mode with initialMode whenever modal opens
   useEffect(() => {
     if (isOpen) {
+      modeRef.current = initialMode;
       setMode(initialMode);
       setError(null);
+      setPendingVerification(null);
       setShowPassword(false);
       setShowGoogleChooser(false);
       setIsAddingNewAccount(false);
       setGoogleAccounts(getSavedGoogleAccounts());
     }
   }, [isOpen, initialMode]);
+
+  // Optionally load Google Identity Services if client ID is configured
+  useEffect(() => {
+    if (!isOpen || pendingVerification) return undefined;
+    let active = true;
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    if (!clientId) {
+      // Do not error out; fallback gracefully to Google Account Chooser
+      return undefined;
+    }
+
+    loadGoogleIdentityServices()
+      .then((google) => {
+        if (!active || !googleButtonRef.current) return;
+        google.accounts.id.initialize({
+          client_id: clientId,
+          callback: (response) => googleHandlerRef.current?.(response.credential)
+        });
+        googleButtonRef.current.replaceChildren();
+        google.accounts.id.renderButton(googleButtonRef.current, {
+          theme: 'outline',
+          size: 'large',
+          text: modeRef.current === 'signup' ? 'signup_with' : 'signin_with',
+          shape: 'rectangular',
+          width: 380
+        });
+      })
+      .catch((loadError) => {
+        console.warn("GIS load info:", loadError.message);
+      });
+
+    return () => { active = false; };
+  }, [isOpen, pendingVerification]);
 
   if (!isOpen) return null;
 
@@ -65,10 +122,11 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
     setPassword('');
     setName('');
     setConfirmPassword('');
-    setCustomGoogleEmail('');
-    setCustomGoogleName('');
+    setPendingVerification(null);
     setShowGoogleChooser(false);
     setIsAddingNewAccount(false);
+    setCustomGoogleEmail('');
+    setCustomGoogleName('');
     setError(null);
   };
 
@@ -136,7 +194,11 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
         if (password !== confirmPassword) {
           throw new Error("Passwords do not match.");
         }
-        await signup(name, email, password);
+        const registration = await signup(name, email, password);
+        if (registration && registration.message && registration.message.includes('verification link')) {
+          setPendingVerification(registration);
+          return;
+        }
       }
       resetForm();
       onClose();
@@ -146,6 +208,7 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
           showToast("No account found. Please create an account.", "warning");
         }
         setMode('signup');
+        modeRef.current = 'signup';
         setError("No account found with this email. Please create your account below.");
       } else {
         setError(err.message || "Authentication failed. Please check your credentials.");
@@ -154,6 +217,8 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
       setLoading(false);
     }
   };
+
+  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
   return (
     <div className="modal-overlay" onClick={handleClose} role="dialog" aria-modal="true">
@@ -186,19 +251,19 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
         </div>
 
         {/* Auth Mode Tabs (only when not in Google Chooser) */}
-        {!showGoogleChooser && (
+        {!showGoogleChooser && !pendingVerification && (
           <div className="auth-tabs-row">
             <button
               type="button"
               className={`auth-tab-btn ${mode === 'signin' ? 'active' : ''}`}
-              onClick={() => { setMode('signin'); setError(null); }}
+              onClick={() => { modeRef.current = 'signin'; setMode('signin'); setError(null); }}
             >
               Sign In
             </button>
             <button
               type="button"
               className={`auth-tab-btn ${mode === 'signup' ? 'active' : ''}`}
-              onClick={() => { setMode('signup'); setError(null); }}
+              onClick={() => { modeRef.current = 'signup'; setMode('signup'); setError(null); }}
             >
               Create Account
             </button>
@@ -215,8 +280,32 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
             </div>
           )}
 
-          {showGoogleChooser ? (
-            /* Google Account Chooser: Shows all user Google accounts */
+          {pendingVerification ? (
+            <div className="text-center py-4" role="status">
+              <CheckCircle2 size={42} className="text-success mb-3" />
+              <h3 className="h5 text-white">Check your email</h3>
+              <p className="text-white-50 mb-3">
+                We sent a verification link to <strong className="text-white">{pendingVerification.email}</strong>.
+                Verify your email before signing in.
+              </p>
+              <p className="small text-white-50">
+                CrediHire user ID: <code>{pendingVerification.user_id}</code>
+              </p>
+              <button
+                type="button"
+                className="btn btn-primary mt-2"
+                onClick={() => {
+                  setPendingVerification(null);
+                  setMode('signin');
+                  modeRef.current = 'signin';
+                  setError(null);
+                }}
+              >
+                Back to sign in
+              </button>
+            </div>
+          ) : showGoogleChooser ? (
+            /* Google Account Chooser: Shows user Google accounts */
             <div className="google-chooser-card">
               <div className="google-chooser-header">
                 <GoogleIcon size={30} />
@@ -355,17 +444,21 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
           ) : (
             /* Standard Sign In / Sign Up Form */
             <>
-              {/* Google Sign In / Sign Up Action Button */}
-              <button
-                type="button"
-                className="btn-google-auth"
-                onClick={handleOpenGoogleChooser}
-                disabled={loading}
-                id="btn-google-auth"
-              >
-                <GoogleIcon size={18} />
-                <span>{mode === 'signin' ? 'Sign in with Google' : 'Sign up with Google'}</span>
-              </button>
+              {/* Google Button */}
+              {clientId ? (
+                <div className="google-signin-button" ref={googleButtonRef} id="btn-google-auth" />
+              ) : (
+                <button
+                  type="button"
+                  className="btn-google-auth"
+                  onClick={handleOpenGoogleChooser}
+                  disabled={loading}
+                  id="btn-google-auth"
+                >
+                  <GoogleIcon size={18} />
+                  <span>{mode === 'signin' ? 'Sign in with Google' : 'Sign up with Google'}</span>
+                </button>
+              )}
 
               {/* Divider: OR Continue with Email */}
               <div className="auth-divider">
@@ -488,7 +581,7 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
                       type="button"
                       className="btn btn-link text-primary p-0 text-decoration-none fw-semibold"
                       style={{ fontSize: '0.82rem' }}
-                      onClick={() => { setMode('signup'); setError(null); }}
+                      onClick={() => { modeRef.current = 'signup'; setMode('signup'); setError(null); }}
                     >
                       Create one free
                     </button>
@@ -500,7 +593,7 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
                       type="button"
                       className="btn btn-link text-primary p-0 text-decoration-none fw-semibold"
                       style={{ fontSize: '0.82rem' }}
-                      onClick={() => { setMode('signin'); setError(null); }}
+                      onClick={() => { modeRef.current = 'signin'; setMode('signin'); setError(null); }}
                     >
                       Sign in here
                     </button>

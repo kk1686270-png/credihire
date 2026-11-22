@@ -19,6 +19,11 @@ class Settings(BaseSettings):
     llm_model: str | None = None
     groq_api_key: str | None = None
     groq_model: str = "openai/gpt-oss-20b"
+    resend_api_key: str | None = None
+    resend_from_email: str | None = None
+    google_client_id: str | None = None
+    frontend_base_url: AnyHttpUrl = "http://localhost:5173"
+    auth_database_path: str = "data/credihire-auth.sqlite3"
     tesseract_cmd: str | None = None
     rule_engine_factory: str | None = None
 

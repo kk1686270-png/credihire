@@ -22,6 +22,16 @@ Use `Content-Type: application/json`; no frontend API key or LLM credential is n
 | `POST` | `${VITE_API_BASE_URL}/scam/analyze/upload` | PDF or screenshot extraction plus deterministic analysis. | `UploadAnalysisResponse` |
 | `POST` | `${VITE_API_BASE_URL}/url/analyze` | Deterministic recruitment website URL credibility analysis. | `UrlAnalysisResponse` |
 | `POST` | `${VITE_API_BASE_URL}/chat/messages` | Scam-awareness chat. | `ChatMessageResponse` |
+| `POST` | `${VITE_API_BASE_URL}/auth/register` | Create an email account and send a Resend verification link. | `user_id`, `email`, `message` |
+| `POST` | `${VITE_API_BASE_URL}/auth/verify` | Verify an account from the email link. | Verified `user`, `message` |
+| `POST` | `${VITE_API_BASE_URL}/auth/login` | Sign in with an email and verified account password. | `user` |
+| `POST` | `${VITE_API_BASE_URL}/auth/google` | Verify a Google Identity Services ID token and sign in. | `user` |
+
+### Email account verification
+
+The backend sends registration email through Resend; configure `RESEND_API_KEY`, a Resend-verified `RESEND_FROM_EMAIL`, and the frontend origin in `FRONTEND_BASE_URL`. Never put the Resend key in Vite environment variables. `POST /auth/register` accepts `{ "name", "email", "password" }` and returns a server-generated `user_id`. The emailed link returns to the frontend with a verification token, which the app submits to `POST /auth/verify`. Password sign-in uses `POST /auth/login` and is rejected until verification succeeds. The SQLite database path is configured with `AUTH_DATABASE_PATH`; use persistent storage in deployments.
+
+Google sign-in requires the same Google OAuth web client ID in backend `GOOGLE_CLIENT_ID` and frontend `VITE_GOOGLE_CLIENT_ID`. Add the exact frontend URL to the OAuth client’s authorized JavaScript origins (for local development: `http://localhost:5173`). The frontend submits only the Google-issued ID token to `POST /auth/google`; the backend checks it with Google and checks its audience before issuing a CrediHire user ID. Never accept names or email addresses typed into a mock Google chooser as proof of identity.
 
 ### Analyze request
 

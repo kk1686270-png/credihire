@@ -27,7 +27,35 @@ function AppContent() {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isExtensionGuideOpen, setIsExtensionGuideOpen] = useState(false);
 
-  const { user, toastMessage, showToast, addScanToHistory } = useAuth();
+  const { user, toastMessage, showToast, addScanToHistory, verifyEmail } = useAuth();
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const token = url.searchParams.get('verify_email');
+    if (!token) return;
+
+    url.searchParams.delete('verify_email');
+    window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+
+    let active = true;
+    verifyEmail(token)
+      .then((response) => {
+        if (!active) return;
+        showToast(response.message);
+        setAuthMode('signin');
+        setIsAuthOpen(true);
+      })
+      .catch((verificationError) => {
+        if (!active) return;
+        showToast(verificationError.message || 'Email verification failed. Please request a new link.', 'warning');
+        setAuthMode('signin');
+        setIsAuthOpen(true);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const {
     result,

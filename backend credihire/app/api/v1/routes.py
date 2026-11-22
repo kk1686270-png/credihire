@@ -1,13 +1,16 @@
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 
 from app.dependencies import get_chatbot_service, get_scam_service, get_url_credibility_service, rule_engine_readiness_status
+from app.dependencies import get_auth_service
 from app.core.config import get_settings
 from app.integrations.llm_client import LLMRateLimited, LLMUnavailable
 from app.schemas.chat import ChatMessageRequest, ChatMessageResponse
+from app.schemas.auth import GoogleLoginRequest, LoginRequest, LoginResponse, RegisterRequest, RegisterResponse, VerifyEmailRequest, VerifyEmailResponse
 from app.schemas.scam import ScamAnalysisRequest, ScamAnalysisResponse
 from app.schemas.upload import UploadAnalysisResponse
 from app.schemas.url import UrlAnalysisRequest, UrlAnalysisResponse
 from app.services.chatbot import ChatbotService
+from app.services.auth import AuthService
 from app.services.scam_analysis import RuleEngineFailure, ScamAnalysisService
 from app.services.upload_extraction import MAX_UPLOAD_BYTES, UploadExtractionError, UploadTextExtractor
 from app.services.url_credibility import UrlCredibilityService
@@ -18,6 +21,26 @@ router = APIRouter(prefix="/api/v1")
 @router.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@router.post("/auth/register", response_model=RegisterResponse, status_code=status.HTTP_201_CREATED, summary="Create an account and send an email verification link")
+async def register(request: RegisterRequest, service: AuthService = Depends(get_auth_service)) -> dict[str, str]:
+    return await service.register(request)
+
+
+@router.post("/auth/verify", response_model=VerifyEmailResponse, summary="Verify an account email address")
+async def verify_email(request: VerifyEmailRequest, service: AuthService = Depends(get_auth_service)) -> dict[str, object]:
+    return service.verify(request.token)
+
+
+@router.post("/auth/google", response_model=LoginResponse, summary="Verify a Google ID token and sign in")
+async def login_with_google(request: GoogleLoginRequest, service: AuthService = Depends(get_auth_service)) -> dict[str, object]:
+    return await service.login_with_google(request.credential)
+
+
+@router.post("/auth/login", response_model=LoginResponse, summary="Sign in to a verified account")
+async def login(request: LoginRequest, service: AuthService = Depends(get_auth_service)) -> dict[str, object]:
+    return service.login(request)
 
 
 @router.get("/ready")

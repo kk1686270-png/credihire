@@ -1241,6 +1241,13 @@
   cursor: not-allowed;
 }
 
+.google-signin-button {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  min-height: 40px;
+}
+
 /* Auth Divider: OR with email */
 .auth-divider {
   display: flex;

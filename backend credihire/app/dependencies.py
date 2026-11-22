@@ -5,9 +5,14 @@ from app.core.config import get_settings
 from app.intelligence.engine import RuleEngineUnavailable
 from app.integrations.llm_client import LLMClient
 from app.services.ai_enrichment import AIEnrichmentService
+from app.services.auth import AuthService
 from app.services.chatbot import ChatbotService
 from app.services.scam_analysis import ScamAnalysisService
 from app.services.url_credibility import UrlCredibilityService
+
+
+def get_auth_service() -> AuthService:
+    return AuthService(get_settings())
 
 
 @lru_cache

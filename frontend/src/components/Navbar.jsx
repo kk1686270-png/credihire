@@ -12,7 +12,8 @@ import {
   Search,
   History,
   Puzzle,
-  Flame
+  Flame,
+  Trash2
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 
@@ -33,7 +34,7 @@ export function Navbar({
 
   const activeSection = controlledActiveSection || internalActiveSection;
 
-  const { user, history, logout } = useAuth();
+  const { user, history, logout, deleteMyAccount } = useAuth();
   const dropdownRef = useRef(null);
 
   useEffect(() => {
@@ -288,6 +289,21 @@ export function Navbar({
                     >
                       <LogOut size={15} />
                       <span>Log Out</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className="account-menu-item text-danger hover-danger"
+                      onClick={() => {
+                        setAccountMenuOpen(false);
+                        if (window.confirm(`Delete saved account and remove ${user.email} from this device?`)) {
+                          deleteMyAccount();
+                        }
+                      }}
+                      title="Delete account and erase your saved email from this device"
+                    >
+                      <Trash2 size={15} />
+                      <span>Delete Account & Saved Email</span>
                     </button>
                   </div>
                 </div>

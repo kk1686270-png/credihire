@@ -14,7 +14,8 @@ import {
   Key,
   HelpCircle,
   RotateCcw,
-  ExternalLink
+  ExternalLink,
+  Trash2
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { loadGoogleIdentityServices, getGoogleOAuthRedirectUrl } from '../utils/googleIdentity.js';
@@ -53,7 +54,16 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
   const modeRef = useRef(mode);
   modeRef.current = mode;
 
-  const { user, login, signup, loginWithGoogle, showToast } = useAuth();
+  const { 
+    user, 
+    login, 
+    signup, 
+    loginWithGoogle, 
+    showToast,
+    savedAccounts = [],
+    removeSavedAccount,
+    clearAllSavedAccounts
+  } = useAuth();
 
   // Automatically close modal when user successfully authenticates
   useEffect(() => {
@@ -578,6 +588,89 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
                 <span className="auth-divider-text">OR CONTINUE WITH EMAIL</span>
                 <div className="auth-divider-line" />
               </div>
+
+              {/* Saved Emails on Device with 1-Click Delete Option */}
+              {savedAccounts && savedAccounts.length > 0 && (
+                <div
+                  className="saved-accounts-box mb-3 p-2 rounded"
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.03)',
+                    border: '1px solid rgba(255, 255, 255, 0.08)'
+                  }}
+                >
+                  <div className="d-flex align-items-center justify-content-between mb-2 px-1">
+                    <span style={{ fontSize: '0.74rem', color: '#94a3b8', fontWeight: 600 }}>
+                      Saved Emails on this device ({savedAccounts.length})
+                    </span>
+                    <button
+                      type="button"
+                      className="btn btn-link p-0 text-decoration-none text-danger"
+                      style={{ fontSize: '0.72rem' }}
+                      onClick={clearAllSavedAccounts}
+                      title="Delete all saved emails from this device"
+                    >
+                      Clear All
+                    </button>
+                  </div>
+                  <div className="d-flex flex-column gap-1">
+                    {savedAccounts.map((acc) => (
+                      <div
+                        key={acc.email}
+                        className="d-flex align-items-center justify-content-between p-2 rounded"
+                        style={{
+                          background: 'rgba(15, 23, 42, 0.65)',
+                          border: '1px solid rgba(255, 255, 255, 0.06)'
+                        }}
+                      >
+                        <button
+                          type="button"
+                          className="btn btn-link text-start text-decoration-none p-0 d-flex align-items-center gap-2 flex-grow-1 overflow-hidden"
+                          onClick={() => {
+                            setEmail(acc.email);
+                            if (mode === 'signin' && acc.password) {
+                              setPassword(acc.password);
+                            }
+                          }}
+                          title="Click to fill this email"
+                        >
+                          <div
+                            className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold flex-shrink-0"
+                            style={{
+                              width: '24px',
+                              height: '24px',
+                              fontSize: '0.7rem',
+                              background: acc.provider === 'google' ? '#ea4335' : '#3b82f6'
+                            }}
+                          >
+                            {(acc.name || acc.email)[0].toUpperCase()}
+                          </div>
+                          <div className="overflow-hidden">
+                            <div className="text-white small text-truncate" style={{ fontSize: '0.76rem', fontWeight: 500 }}>
+                              {acc.name || 'Account'}
+                            </div>
+                            <div className="text-white-50 small text-truncate" style={{ fontSize: '0.71rem' }}>
+                              {acc.email}
+                            </div>
+                          </div>
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-outline-danger p-1 d-flex align-items-center justify-content-center ms-2 flex-shrink-0"
+                          style={{ width: '26px', height: '26px', borderRadius: '5px' }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeSavedAccount(acc.email);
+                          }}
+                          title={`Delete ${acc.email} from saved list`}
+                          aria-label={`Delete ${acc.email}`}
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Standard Email & Password Form */}
               <form onSubmit={handleSubmit} className="d-flex flex-column gap-3">

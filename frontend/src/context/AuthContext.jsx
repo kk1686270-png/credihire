@@ -54,6 +54,7 @@ export function AuthProvider({ children }) {
     }
   });
 
+  const [savedAccounts, setSavedAccounts] = useState(() => getRegisteredAccounts());
   const [history, setHistory] = useState([]);
   const [toastMessage, setToastMessage] = useState(null);
 
@@ -251,6 +252,7 @@ export function AuthProvider({ children }) {
       joinedAt: new Date().toLocaleDateString()
     };
     saveRegisteredAccount(localAccount);
+    setSavedAccounts(getRegisteredAccounts());
 
     const sessionUser = { ...localAccount };
     delete sessionUser.password;
@@ -364,10 +366,54 @@ export function AuthProvider({ children }) {
     };
 
     saveRegisteredAccount(sessionUser);
+    setSavedAccounts(getRegisteredAccounts());
     setUser(sessionUser);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(sessionUser));
     showToast(`Welcome, ${sessionUser.name}! Signed in with Google.`);
     return sessionUser;
+  };
+
+  const removeSavedAccount = (emailToRemove) => {
+    if (!emailToRemove) return [];
+    try {
+      const accounts = getRegisteredAccounts();
+      const updated = accounts.filter(a => a.email?.toLowerCase() !== emailToRemove.toLowerCase());
+      localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(updated));
+      setSavedAccounts(updated);
+      showToast(`Removed saved email ${emailToRemove} from this device.`, 'info');
+      if (user && user.email?.toLowerCase() === emailToRemove.toLowerCase()) {
+        logout();
+      }
+      return updated;
+    } catch (e) {
+      console.warn("Could not remove saved account:", e);
+      return [];
+    }
+  };
+
+  const clearAllSavedAccounts = () => {
+    try {
+      localStorage.removeItem(USERS_STORAGE_KEY);
+      setSavedAccounts([]);
+      showToast("All saved emails removed from this device.", 'info');
+      if (user) {
+        logout();
+      }
+    } catch (e) {
+      console.warn("Could not clear saved accounts:", e);
+    }
+  };
+
+  const deleteMyAccount = () => {
+    if (!user || !user.email) return;
+    const emailToDelete = user.email;
+    removeSavedAccount(emailToDelete);
+    if (user.id) {
+      try {
+        localStorage.removeItem(HISTORY_KEY_PREFIX + user.id);
+      } catch {}
+    }
+    showToast(`Account ${emailToDelete} and data deleted successfully.`, 'info');
   };
 
   const logout = () => {
@@ -451,7 +497,11 @@ export function AuthProvider({ children }) {
       history,
       addScanToHistory,
       deleteHistoryItem,
-      clearHistory
+      clearHistory,
+      savedAccounts,
+      removeSavedAccount,
+      clearAllSavedAccounts,
+      deleteMyAccount
     }}>
       {children}
     </AuthContext.Provider>

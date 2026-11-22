@@ -78,7 +78,17 @@ export function Chatbot({ analysisId }) {
       }]);
       setLastRequest(null);
     } catch (caughtError) {
-      setError(caughtError instanceof ChatApiError ? caughtError.message : 'Chat could not respond. Please try again.');
+      const errMsg = caughtError instanceof ChatApiError ? caughtError.message : 'Chat could not respond. Please try again.';
+      setError(errMsg);
+      // Auto-fallback: generate instant deterministic scam advice so user gets immediate protection even if AI server is busy
+      const local = generateLocalScamAdvice(trimmed, analysisId);
+      setMessages((current) => [...current, {
+        id: `offline-${Date.now()}`,
+        role: 'assistant',
+        reply: `🛡️ [Offline Safety Advisory]: ${local.reply}`,
+        disclaimer: local.disclaimer,
+        analysis: null
+      }]);
     } finally {
       setIsLoading(false);
     }

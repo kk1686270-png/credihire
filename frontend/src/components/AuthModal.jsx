@@ -17,7 +17,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
-import { loadGoogleIdentityServices } from '../utils/googleIdentity.js';
+import { loadGoogleIdentityServices, getGoogleOAuthRedirectUrl } from '../utils/googleIdentity.js';
 import { validateGoogleClientId, isValidGoogleClientId } from '../utils/validation.js';
 
 function GoogleIcon({ size = 18 }) {
@@ -46,6 +46,7 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
   const [showGoogleSetup, setShowGoogleSetup] = useState(false);
   const [showSetupGuide, setShowSetupGuide] = useState(false);
   const [customClientId, setCustomClientId] = useState('');
+  const [isGoogleLoaded, setIsGoogleLoaded] = useState(false);
 
   const googleButtonRef = useRef(null);
   const googleHandlerRef = useRef(null);
@@ -112,6 +113,7 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
     let active = true;
     const clientId = configuredClientId || getEffectiveGoogleClientId();
     if (!clientId) {
+      setIsGoogleLoaded(false);
       return undefined;
     }
 
@@ -135,11 +137,13 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
           size: 'large',
           text: modeRef.current === 'signup' ? 'signup_with' : 'signin_with',
           shape: 'rectangular',
-          width: 380
+          width: 360
         });
+        setIsGoogleLoaded(true);
       })
       .catch((loadError) => {
         console.warn("Google Identity Services notice:", loadError.message);
+        setIsGoogleLoaded(false);
       });
 
     return () => { active = false; };
@@ -175,22 +179,38 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
 
     try {
       setLoading(true);
-      const google = await loadGoogleIdentityServices();
-      google.accounts.id.initialize({
-        client_id: clientId,
-        callback: (response) => googleHandlerRef.current?.(response.credential),
-        error_callback: (gisError) => {
-          console.warn("GIS Error prompt:", gisError);
-          if (gisError?.type === 'popup_closed_by_user') return;
-          setError(
-            'Google Sign-In blocked (Error 401). Ensure your Client ID ends in ".apps.googleusercontent.com" and "http://localhost:5173" is added to Authorized JavaScript origins.'
-          );
-        }
+      // If Google Identity Services is available in window, initialize and attempt One Tap / prompt
+      if (globalThis.google?.accounts?.id) {
+        globalThis.google.accounts.id.initialize({
+          client_id: clientId,
+          callback: (response) => googleHandlerRef.current?.(response.credential),
+          error_callback: (gisError) => {
+            console.warn("GIS Error on prompt:", gisError);
+          }
+        });
+        globalThis.google.accounts.id.prompt((notification) => {
+          if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+            // Browser FedCM cooldown or suppressed One-Tap, redirect directly to Google OAuth 2.0
+            const redirectUrl = getGoogleOAuthRedirectUrl({
+              clientId,
+              emailHint: email,
+              redirectUri: window.location.origin
+            });
+            window.location.href = redirectUrl;
+          }
+        });
+        return;
+      }
+
+      // Launch official Google OAuth 2.0 Web authorization flow with account selection
+      const redirectUrl = getGoogleOAuthRedirectUrl({
+        clientId,
+        emailHint: email,
+        redirectUri: window.location.origin
       });
-      google.accounts.id.prompt();
+      window.location.href = redirectUrl;
     } catch (err) {
       setError(err.message || 'Unable to open Google Sign-In. Check your connection.');
-    } finally {
       setLoading(false);
     }
   };
@@ -483,6 +503,7 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
                         <li>Click <strong>Create Credentials</strong> ➜ <strong>OAuth client ID</strong>.</li>
                         <li>Application type: Select <strong>Web application</strong> (NOT Desktop or Android).</li>
                         <li>Under <strong>Authorized JavaScript origins</strong>, add: <code>http://localhost:5173</code> and <code>http://localhost</code>.</li>
+                        <li>Under <strong>OAuth consent screen ➜ Test users</strong>, add your personal Gmail address if testing.</li>
                         <li>Copy the generated <strong>Client ID</strong> (ends in <code>.apps.googleusercontent.com</code>) and paste it above!</li>
                       </ol>
                     )}
@@ -490,21 +511,29 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
                 </div>
               )}
 
-              {/* Always Visible & Reliable Google Sign In / Sign Up Button */}
+              {/* Google Sign In / Sign Up Button */}
               <div className="mb-3">
-                <button
-                  type="button"
-                  className="btn-google-auth"
-                  onClick={handleLaunchGoogleSignIn}
-                  disabled={loading}
-                  id="btn-google-auth"
-                >
-                  <GoogleIcon size={18} />
-                  <span>{mode === 'signin' ? 'Sign in with Google' : 'Sign up with Google'}</span>
-                </button>
+                {/* Fallback button when GIS iframe is loading or suppressed - rendered OUTSIDE googleButtonRef to prevent React DOM collisions */}
+                {!isGoogleLoaded && (
+                  <button
+                    type="button"
+                    className="btn-google-auth w-100"
+                    id="btn-google-auth"
+                    onClick={handleLaunchGoogleSignIn}
+                    disabled={loading}
+                  >
+                    <GoogleIcon size={18} />
+                    <span>{mode === 'signin' ? 'Sign in with Google' : 'Sign up with Google'}</span>
+                  </button>
+                )}
 
-                {/* Hidden container for GIS SDK background initialization */}
-                <div ref={googleButtonRef} style={{ display: 'none' }} aria-hidden="true" />
+                {/* Dedicated empty mounting container for Google Identity Services renderButton (no React JSX children) */}
+                <div
+                  ref={googleButtonRef}
+                  id="google-gis-mount-slot"
+                  className={`google-signin-container d-flex justify-content-center w-100 ${!isGoogleLoaded ? 'd-none' : ''}`}
+                  style={{ minHeight: isGoogleLoaded ? '44px' : '0px' }}
+                />
 
                 {effectiveClientId && (
                   <div className="d-flex justify-content-center align-items-center gap-2 mt-2">

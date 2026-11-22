@@ -1,5 +1,5 @@
 const GOOGLE_IDENTITY_SCRIPT = 'https://accounts.google.com/gsi/client';
-let googleScriptPromise;
+let googleScriptPromise = null;
 
 export function loadGoogleIdentityServices() {
   if (globalThis.google?.accounts?.id) {
@@ -10,33 +10,60 @@ export function loadGoogleIdentityServices() {
   }
 
   googleScriptPromise = new Promise((resolve, reject) => {
-    let script = document.querySelector(`script[src="${GOOGLE_IDENTITY_SCRIPT}"]`);
-    const handleLoad = () => {
-      if (globalThis.google?.accounts?.id) {
-        resolve(globalThis.google);
-      } else {
-        googleScriptPromise = null;
-        reject(new Error('Google sign-in could not be loaded. Please try again.'));
-      }
-    };
-    const handleError = () => {
-      googleScriptPromise = null;
-      reject(new Error('Google sign-in could not be loaded. Please try again.'));
-    };
-
-    if (!script) {
-      script = document.createElement('script');
-      script.src = GOOGLE_IDENTITY_SCRIPT;
-      script.async = true;
-      script.defer = true;
-      script.addEventListener('load', handleLoad, { once: true });
-      script.addEventListener('error', handleError, { once: true });
-      document.head.appendChild(script);
+    // If google identity already loaded in globalThis
+    if (globalThis.google?.accounts?.id) {
+      resolve(globalThis.google);
       return;
     }
 
-    script.addEventListener('load', handleLoad, { once: true });
-    script.addEventListener('error', handleError, { once: true });
+    let existingScript = document.querySelector(`script[src="${GOOGLE_IDENTITY_SCRIPT}"]`);
+    if (existingScript) {
+      // If script exists in DOM, poll for window.google
+      let attempts = 0;
+      const interval = setInterval(() => {
+        attempts += 1;
+        if (globalThis.google?.accounts?.id) {
+          clearInterval(interval);
+          resolve(globalThis.google);
+        } else if (attempts > 40) {
+          clearInterval(interval);
+          // Script might be stalled, remove it to re-fetch
+          existingScript.remove();
+          googleScriptPromise = null;
+          loadGoogleIdentityServices().then(resolve).catch(reject);
+        }
+      }, 50);
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = GOOGLE_IDENTITY_SCRIPT;
+    script.async = true;
+    script.defer = true;
+
+    script.onload = () => {
+      if (globalThis.google?.accounts?.id) {
+        resolve(globalThis.google);
+      } else {
+        // Give GIS a tiny moment to initialize after script execution
+        setTimeout(() => {
+          if (globalThis.google?.accounts?.id) {
+            resolve(globalThis.google);
+          } else {
+            googleScriptPromise = null;
+            reject(new Error('Google Identity Services initialized without accounts.id'));
+          }
+        }, 100);
+      }
+    };
+
+    script.onerror = () => {
+      googleScriptPromise = null;
+      script.remove();
+      reject(new Error('Google sign-in script could not be loaded. Please check your connection.'));
+    };
+
+    document.head.appendChild(script);
   });
 
   return googleScriptPromise;
@@ -55,11 +82,10 @@ export function getGoogleOAuthRedirectUrl({ clientId, emailHint = '', redirectUr
     response_type: 'id_token token',
     scope: 'openid email profile',
     nonce: Math.random().toString(36).substring(2),
-    prompt: 'consent'
+    prompt: 'select_account'
   });
   if (emailHint) {
     params.set('login_hint', emailHint.trim().toLowerCase());
   }
   return `${base}?${params.toString()}`;
 }
-

@@ -1,10 +1,11 @@
-import React from 'react';
-import { LifeBuoy, ArrowRight, RotateCcw, Copy, Check, Sparkles, Globe } from 'lucide-react';
+import React, { useState } from 'react';
+import { LifeBuoy, ArrowRight, RotateCcw, Copy, Check, Sparkles, Globe, Download, FileText } from 'lucide-react';
 import { SubmittedContent } from './SubmittedContent';
 import { RiskScoreCard } from './RiskScoreCard';
 import { WarningSigns } from './WarningSigns';
 import { RecommendedActions } from './RecommendedActions';
 import { UrlCredibilityCard } from './UrlCredibilityCard';
+import { downloadEvidenceDossierPdf } from '../services/osintService.js';
 
 export function ResultsPanel({
   result,
@@ -15,8 +16,28 @@ export function ResultsPanel({
   onOpenAuth
 }) {
   const [copied, setCopied] = React.useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   if (!result) return null;
+
+  const handleDownloadPdf = async () => {
+    setDownloadingPdf(true);
+    try {
+      await downloadEvidenceDossierPdf({
+        scan_title: result.headline || 'CrediHire Fraud Investigation',
+        risk_score: result.riskScore || 85,
+        risk_level: result.riskLevel || 'high',
+        job_text: result.submittedText || result.targetUrl || 'Suspicious recruitment message',
+        indicators: result.warningSigns?.map(w => `${w.title}: ${w.explanation}`) || [],
+        demanded_amount: result.warningSigns?.find(w => /deposit|fee/i.test(w.title))?.title || null,
+        payment_handle: null,
+      });
+    } catch (e) {
+      alert(`Could not download PDF dossier: ${e.message}`);
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
 
   const fallbackCopy = (text) => {
     try {
@@ -176,6 +197,44 @@ ${result.recommendations?.map(r => `${r.step || ''}. ${r.title}: ${r.description
                 >
                   <span>Recovery Guide</span>
                   <ArrowRight size={14} />
+                </button>
+              </div>
+
+              {/* Official Cybercrime Evidence Dossier PDF Export */}
+              <div
+                className="recovery-mini-card mt-3"
+                style={{
+                  borderColor: 'rgba(239, 68, 68, 0.35)',
+                  background: 'rgba(239, 68, 68, 0.05)',
+                }}
+              >
+                <div className="recovery-mini-left">
+                  <div
+                    className="recovery-icon-circle"
+                    style={{
+                      background: 'rgba(239, 68, 68, 0.15)',
+                      color: '#ef4444',
+                    }}
+                  >
+                    <FileText size={22} />
+                  </div>
+                  <div className="recovery-text-wrapper">
+                    <span className="recovery-card-title text-white">Need Official Legal Proof?</span>
+                    <span className="recovery-card-desc">
+                      Export stamped Evidence Dossier (PDF) for 1930 / cybercrime.gov.in complaint.
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-danger d-inline-flex align-items-center gap-1.5 px-3 py-1.5 fw-semibold"
+                  onClick={handleDownloadPdf}
+                  disabled={downloadingPdf}
+                  style={{ borderRadius: '6px', whiteSpace: 'nowrap' }}
+                >
+                  <Download size={14} />
+                  <span>{downloadingPdf ? 'Generating...' : 'Download PDF Dossier'}</span>
                 </button>
               </div>
             </div>

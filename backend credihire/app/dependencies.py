@@ -9,6 +9,8 @@ from app.services.auth import AuthService
 from app.services.chatbot import ChatbotService
 from app.services.scam_analysis import ScamAnalysisService
 from app.services.url_credibility import UrlCredibilityService
+from app.services.osint import OsintService
+from app.services.evidence_pdf import EvidencePdfGenerator
 
 
 def get_auth_service() -> AuthService:
@@ -45,3 +47,13 @@ def get_chatbot_service() -> ChatbotService:
 @lru_cache
 def get_url_credibility_service() -> UrlCredibilityService:
     return UrlCredibilityService()
+
+
+@lru_cache
+def get_osint_service() -> OsintService:
+    return OsintService()
+
+
+@lru_cache
+def get_evidence_pdf_generator() -> EvidencePdfGenerator:
+    return EvidencePdfGenerator()

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AlertCircle, Bot, Loader2, RotateCcw, Send, ShieldAlert, Sparkles, Trash2, X } from 'lucide-react';
 import { ChatApiError, createSessionId, sendChatMessage } from '../services/chatService.js';
+import { generateLocalScamAdvice } from '../utils/localScamAdvisor.js';
 
 const WELCOME_MESSAGE = {
   id: 'welcome',
@@ -83,6 +84,20 @@ export function Chatbot({ analysisId }) {
     }
   };
 
+  const useOfflineAdvice = () => {
+    if (!lastRequest?.message) return;
+    const local = generateLocalScamAdvice(lastRequest.message, lastRequest.analysisId);
+    setMessages((current) => [...current, {
+      id: `offline-${Date.now()}`,
+      role: 'assistant',
+      reply: local.reply,
+      disclaimer: local.disclaimer,
+      analysis: null
+    }]);
+    setError('');
+    setLastRequest(null);
+  };
+
   const clearConversation = () => {
     setMessages([WELCOME_MESSAGE]);
     setSessionId(createSessionId());
@@ -110,7 +125,33 @@ export function Chatbot({ analysisId }) {
             {messages.length === 1 && <div className="chat-suggestions">{SUGGESTIONS.map((suggestion) => <button type="button" key={suggestion} onClick={() => submitMessage(suggestion)}>{suggestion}</button>)}</div>}
             {isLoading && <div className="chat-message assistant"><div className="chat-message-bubble chat-loading"><Loader2 size={16} className="spin" /> Thinking…</div></div>}
           </div>
-          {error && <div className="chat-error" role="alert"><AlertCircle size={16} /><span>{error}</span>{lastRequest && <button type="button" onClick={() => submitMessage(lastRequest.message, true)} disabled={isLoading}><RotateCcw size={14} /> Retry</button>}</div>}
+          {error && (
+            <div className="chat-error d-flex flex-column gap-2" role="alert">
+              <div className="d-flex align-items-center justify-content-between w-100 gap-2">
+                <div className="d-flex align-items-center gap-2">
+                  <AlertCircle size={16} />
+                  <span>{error}</span>
+                </div>
+                {lastRequest && (
+                  <button type="button" onClick={() => submitMessage(lastRequest.message, true)} disabled={isLoading} className="btn-chat-retry">
+                    <RotateCcw size={14} /> Retry
+                  </button>
+                )}
+              </div>
+              {lastRequest && (
+                <div className="pt-2 border-top border-white-10">
+                  <button
+                    type="button"
+                    onClick={useOfflineAdvice}
+                    className="btn btn-sm btn-outline-info w-100 py-1 d-flex align-items-center justify-content-center gap-1 shadow-sm"
+                    style={{ fontSize: '0.78rem' }}
+                  >
+                    <Sparkles size={13} /> Get Instant Offline Scam Advice
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
           <form className="chatbot-composer" onSubmit={(event) => { event.preventDefault(); submitMessage(draft); }}>
             <label className="chat-analysis-toggle"><input type="checkbox" checked={analyzeMessage} onChange={(event) => setAnalyzeMessage(event.target.checked)} /> Analyze my message for scam indicators</label>
             <div className="chat-input-row"><textarea ref={inputRef} value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); submitMessage(draft); } }} placeholder="Ask about a suspicious job message…" maxLength={4000} aria-label="Message Credihire AI Assistant" rows={2} disabled={isLoading} /><button type="submit" className="chat-send-button" aria-label="Send message" disabled={isLoading || !draft.trim()}><Send size={17} /></button></div>

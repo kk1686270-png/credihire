@@ -490,11 +490,24 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
                 </div>
               )}
 
-              {/* Real Google Sign In / Sign Up Button */}
-              {effectiveClientId ? (
-                <div className="mb-3">
-                  <div className="google-signin-button d-flex justify-content-center mb-1" ref={googleButtonRef} id="btn-google-auth" />
-                  <div className="d-flex justify-content-center align-items-center gap-2">
+              {/* Always Visible & Reliable Google Sign In / Sign Up Button */}
+              <div className="mb-3">
+                <button
+                  type="button"
+                  className="btn-google-auth"
+                  onClick={handleLaunchGoogleSignIn}
+                  disabled={loading}
+                  id="btn-google-auth"
+                >
+                  <GoogleIcon size={18} />
+                  <span>{mode === 'signin' ? 'Sign in with Google' : 'Sign up with Google'}</span>
+                </button>
+
+                {/* Hidden container for GIS SDK background initialization */}
+                <div ref={googleButtonRef} style={{ display: 'none' }} aria-hidden="true" />
+
+                {effectiveClientId && (
+                  <div className="d-flex justify-content-center align-items-center gap-2 mt-2">
                     <span style={{ fontSize: '0.72rem', color: '#64748b' }}>Google OAuth active</span>
                     <span style={{ color: '#475569' }}>•</span>
                     <button
@@ -509,19 +522,8 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
                       Change or Reset Client ID
                     </button>
                   </div>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  className="btn-google-auth"
-                  onClick={handleLaunchGoogleSignIn}
-                  disabled={loading}
-                  id="btn-google-auth"
-                >
-                  <GoogleIcon size={18} />
-                  <span>{mode === 'signin' ? 'Sign in with Google' : 'Sign up with Google'}</span>
-                </button>
-              )}
+                )}
+              </div>
 
               {/* Divider: OR Continue with Email */}
               <div className="auth-divider">

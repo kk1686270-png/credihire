@@ -2122,3 +2122,35 @@
   box-shadow: 0 8px 30px rgba(239, 68, 68, 0.12), 0 4px 15px rgba(0, 0, 0, 0.5);
 }
 
+
+/* =========================================================
+   OSINT FORENSICS SUITE
+========================================================= */
+
+.osint-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 18px;
+  border-radius: 9999px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(15, 23, 42, 0.6);
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.osint-tab-btn:hover {
+  background: rgba(30, 41, 59, 0.9);
+  color: #f8fafc;
+  border-color: rgba(96, 165, 250, 0.4);
+}
+
+.osint-tab-btn.active {
+  background: rgba(37, 99, 235, 0.2);
+  color: #60a5fa;
+  border-color: #3b82f6;
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.35);
+}

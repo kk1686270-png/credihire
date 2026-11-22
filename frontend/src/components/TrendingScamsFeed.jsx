@@ -309,7 +309,7 @@ export function TrendingScamsFeed({ onTestScam }) {
                   </div>
                 </div>
 
-                {/* Footer: Reported Loss & Action Button */}
+                {/* Footer: Reported Loss */}
                 <div className="d-flex align-items-center justify-content-between pt-3 border-top border-secondary border-opacity-25 mt-2 gap-2 flex-wrap">
                   <div>
                     <span className="text-white-50 d-block" style={{ fontSize: '0.68rem' }}>AVG. REPORTED LOSS</span>
@@ -318,17 +318,6 @@ export function TrendingScamsFeed({ onTestScam }) {
                       {scam.avgLoss}
                     </span>
                   </div>
-
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-sm d-inline-flex align-items-center gap-2 fw-semibold px-3 py-2"
-                    style={{ fontSize: '0.78rem', borderRadius: '6px' }}
-                    onClick={() => onTestScam && onTestScam(scam.sampleText)}
-                    title="Load this scam into CrediHire analyzer to test detection"
-                  >
-                    <span>⚡ Test in Analyzer</span>
-                    <ArrowRight size={13} />
-                  </button>
                 </div>
               </div>
             </div>

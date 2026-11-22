@@ -56,7 +56,7 @@ test('TrendingScamsFeed component exists and contains required scam intelligence
   assert.ok(content.includes('Indigo Airlines / Airport Ground Staff'), 'Includes Indigo airport scam');
   assert.ok(content.includes('Work From Home Notepad / Excel Data Entry'), 'Includes WFH data entry scam');
   assert.ok(content.includes('HR Recruiter Impersonation & APK'), 'Includes HR APK malware scam');
-  assert.ok(content.includes('Test in Analyzer'), 'Provides 1-click Test in Analyzer button');
+  assert.ok(content.includes('AVG. REPORTED LOSS'), 'Displays average reported loss per scam type');
   assert.ok(content.includes('Report a Scam You Encountered'), 'Includes community report action');
 });
 

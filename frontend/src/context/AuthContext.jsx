@@ -75,21 +75,66 @@ export function AuthProvider({ children }) {
     }
   }, [user]);
 
-  // Handle Google OAuth 2.0 redirect tokens (e.g. #id_token=...)
+  // Handle Google OAuth 2.0 popup and redirect tokens
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined') return undefined;
+
+    // 1. If this window itself was opened as a popup by CrediHire:
+    if (window.opener && window.opener !== window) {
+      const hash = window.location.hash;
+      if (hash && (hash.includes('id_token=') || hash.includes('access_token='))) {
+        try {
+          window.opener.postMessage({ type: 'GOOGLE_OAUTH_TOKEN', hash }, window.location.origin);
+          window.close();
+          return undefined;
+        } catch (e) {
+          console.warn("Could not postMessage to opener window:", e);
+        }
+      }
+    }
+
+    // 2. Direct full-page redirect handling (when not in popup):
     const hash = window.location.hash;
     if (hash && (hash.includes('id_token=') || hash.includes('access_token='))) {
-      const params = new URLSearchParams(hash.substring(1));
+      const params = new URLSearchParams(hash.replace(/^#/, ''));
       const idToken = params.get('id_token');
+      const accessToken = params.get('access_token');
       if (idToken) {
         loginWithGoogle(idToken).then(() => {
           window.history.replaceState(null, '', window.location.pathname + window.location.search);
         }).catch(err => {
           console.warn("Google OAuth redirect token error:", err);
         });
+      } else if (accessToken) {
+        loginWithGoogle({ accessToken }).then(() => {
+          window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        }).catch(err => {
+          console.warn("Google OAuth access token error:", err);
+        });
       }
     }
+
+    // 3. Listen for postMessage from Google OAuth popup:
+    const handlePopupMessage = (event) => {
+      if (event.origin !== window.location.origin) return;
+      if (event.data?.type === 'GOOGLE_OAUTH_TOKEN' && event.data?.hash) {
+        const params = new URLSearchParams(event.data.hash.replace(/^#/, ''));
+        const idToken = params.get('id_token');
+        const accessToken = params.get('access_token');
+        if (idToken) {
+          loginWithGoogle(idToken).catch(err => {
+            console.warn("Google OAuth token error from popup:", err);
+          });
+        } else if (accessToken) {
+          loginWithGoogle({ accessToken }).catch(err => {
+            console.warn("Google OAuth access token error from popup:", err);
+          });
+        }
+      }
+    };
+
+    window.addEventListener('message', handlePopupMessage);
+    return () => window.removeEventListener('message', handlePopupMessage);
   }, []);
 
   const showToast = (msg, type = 'info') => {
@@ -278,6 +323,23 @@ export function AuthProvider({ children }) {
       }
     } else if (googleData && typeof googleData === 'object' && googleData.credential) {
       return loginWithGoogle(googleData.credential);
+    } else if (googleData && typeof googleData === 'object' && googleData.accessToken) {
+      try {
+        const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+          headers: { Authorization: `Bearer ${googleData.accessToken}` }
+        });
+        if (userInfoRes.ok) {
+          const profile = await userInfoRes.json();
+          email = profile.email || '';
+          name = profile.name || profile.given_name || 'Google User';
+          picture = profile.picture || null;
+          sub = profile.sub || null;
+        } else {
+          throw new Error('Unable to retrieve Google profile with access token.');
+        }
+      } catch (profileErr) {
+        throw new Error(profileErr.message || 'Google access verification failed.');
+      }
     } else {
       throw new Error('Please authenticate through the official Google Sign-In prompt.');
     }

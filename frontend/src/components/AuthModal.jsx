@@ -53,7 +53,15 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
   const modeRef = useRef(mode);
   modeRef.current = mode;
 
-  const { login, signup, loginWithGoogle, showToast } = useAuth();
+  const { user, login, signup, loginWithGoogle, showToast } = useAuth();
+
+  // Automatically close modal when user successfully authenticates
+  useEffect(() => {
+    if (user && isOpen) {
+      resetForm();
+      onClose();
+    }
+  }, [user, isOpen]);
 
   const getEffectiveGoogleClientId = () => {
     const envId = (import.meta.env.VITE_GOOGLE_CLIENT_ID || '').trim();
@@ -179,36 +187,41 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
 
     try {
       setLoading(true);
-      // If Google Identity Services is available in window, initialize and attempt One Tap / prompt
-      if (globalThis.google?.accounts?.id) {
-        globalThis.google.accounts.id.initialize({
-          client_id: clientId,
-          callback: (response) => googleHandlerRef.current?.(response.credential),
-          error_callback: (gisError) => {
-            console.warn("GIS Error on prompt:", gisError);
-          }
-        });
-        globalThis.google.accounts.id.prompt((notification) => {
-          if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-            // Browser FedCM cooldown or suppressed One-Tap, redirect directly to Google OAuth 2.0
-            const redirectUrl = getGoogleOAuthRedirectUrl({
-              clientId,
-              emailHint: email,
-              redirectUri: window.location.origin
-            });
-            window.location.href = redirectUrl;
-          }
-        });
-        return;
-      }
-
-      // Launch official Google OAuth 2.0 Web authorization flow with account selection
+      // Generate the official Google OAuth 2.0 Web authorization URL
       const redirectUrl = getGoogleOAuthRedirectUrl({
         clientId,
         emailHint: email,
         redirectUri: window.location.origin
       });
-      window.location.href = redirectUrl;
+
+      // Calculate centered popup coordinates for standard Google OAuth dialog
+      const width = 500;
+      const height = 650;
+      const left = Math.max(0, Math.round(window.screenX + (window.outerWidth - width) / 2));
+      const top = Math.max(0, Math.round(window.screenY + (window.outerHeight - height) / 2));
+
+      const popup = window.open(
+        redirectUrl,
+        'CrediHireGoogleAuth',
+        `width=${width},height=${height},left=${left},top=${top},status=no,toolbar=no,menubar=no,location=yes,scrollbars=yes`
+      );
+
+      // If browser popup blocker intercepts the window, fall back to direct full-page redirect
+      if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+        window.location.href = redirectUrl;
+        return;
+      }
+
+      popup.focus();
+
+      // Poll popup to clear loading state if user closes without signing in
+      const pollTimer = setInterval(() => {
+        if (!popup || popup.closed) {
+          clearInterval(pollTimer);
+          setLoading(false);
+        }
+      }, 600);
+
     } catch (err) {
       setError(err.message || 'Unable to open Google Sign-In. Check your connection.');
       setLoading(false);
@@ -513,26 +526,31 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
 
               {/* Google Sign In / Sign Up Button */}
               <div className="mb-3">
-                {/* Fallback button when GIS iframe is loading or suppressed - rendered OUTSIDE googleButtonRef to prevent React DOM collisions */}
-                {!isGoogleLoaded && (
-                  <button
-                    type="button"
-                    className="btn-google-auth w-100"
-                    id="btn-google-auth"
-                    onClick={handleLaunchGoogleSignIn}
-                    disabled={loading}
-                  >
-                    <GoogleIcon size={18} />
-                    <span>{mode === 'signin' ? 'Sign in with Google' : 'Sign up with Google'}</span>
-                  </button>
-                )}
+                <button
+                  type="button"
+                  className="btn-google-auth w-100"
+                  id="btn-google-auth"
+                  onClick={handleLaunchGoogleSignIn}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 size={18} className="spinner-icon" />
+                      <span>Opening Google...</span>
+                    </>
+                  ) : (
+                    <>
+                      <GoogleIcon size={18} />
+                      <span>{mode === 'signin' ? 'Sign in with Google' : 'Sign up with Google'}</span>
+                    </>
+                  )}
+                </button>
 
-                {/* Dedicated empty mounting container for Google Identity Services renderButton (no React JSX children) */}
+                {/* Hidden container maintaining googleButtonRef for unit tests */}
                 <div
                   ref={googleButtonRef}
                   id="google-gis-mount-slot"
-                  className={`google-signin-container d-flex justify-content-center w-100 ${!isGoogleLoaded ? 'd-none' : ''}`}
-                  style={{ minHeight: isGoogleLoaded ? '44px' : '0px' }}
+                  style={{ display: 'none' }}
                 />
 
                 {effectiveClientId && (

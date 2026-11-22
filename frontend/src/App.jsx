@@ -15,6 +15,7 @@ import { useAnalysis } from './hooks/useAnalysis';
 import { Sparkles, AlertTriangle } from 'lucide-react';
 import { Chatbot } from './components/Chatbot';
 import { ExtensionGuide } from './components/ExtensionGuide';
+import { TrendingScamsFeed } from './components/TrendingScamsFeed';
 
 function AppContent() {
   const [isRecoveryOpen, setIsRecoveryOpen] = useState(false);
@@ -211,6 +212,25 @@ function AppContent() {
     }
   };
 
+  // Test a scam directly from the Community Trending Scams Radar
+  const handleTestScamText = async (scamSample) => {
+    setInputMode('text');
+    setInputText(scamSample);
+    setAttachedFile(null);
+    focusInputArea();
+    if (!user) {
+      showToast("Please signin/signup", "warning");
+    }
+    const scanData = await analyze(scamSample, null);
+    if (scanData && user) {
+      addScanToHistory(scanData);
+    }
+    const resultsEl = document.getElementById('results-section');
+    if (resultsEl) {
+      resultsEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  };
+
   return (
     <div className="app-container">
       {/* Mountain Terrain Atmosphere Silhouettes (Reference Image Visuals) */}
@@ -306,6 +326,9 @@ function AppContent() {
           isScoreHidden={!user && !result?.isDemo}
           onOpenAuth={handleOpenAuth}
         />
+
+        {/* Live Community Scam Radar & Trending Alerts */}
+        <TrendingScamsFeed onTestScam={handleTestScamText} />
       </main>
 
       {/* Footer & Disclaimer */}

@@ -11,7 +11,8 @@ import {
   Sparkles,
   Search,
   History,
-  Puzzle
+  Puzzle,
+  Flame
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 
@@ -116,17 +117,29 @@ export function Navbar({
           >
             Safety Tips
           </button>
+          <a
+            href="#trending-scams-radar"
+            className="nav-link-item text-decoration-none d-inline-flex align-items-center gap-1"
+            onClick={(e) => {
+              e.preventDefault();
+              const el = document.getElementById('trending-scams-radar');
+              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }}
+          >
+            <Flame size={14} className="text-danger" />
+            <span>Trending Scams</span>
+          </a>
 
-          {/* Logged In Only: History Tab */}
+          {/* Logged In Only: Safety Dashboard / History Tab */}
           {user && (
             <button
               type="button"
               className={`nav-link-item border-0 bg-transparent d-inline-flex align-items-center gap-1 ${activeSection === 'history' ? 'active' : ''}`}
               onClick={() => handleNavClick('history', onOpenHistory)}
-              title="View your saved scam scan history"
+              title="View your saved scam scan history & safety dashboard"
             >
               <History size={14} className="text-primary" />
-              <span>History</span>
+              <span>Safety Dashboard</span>
               {history && history.length > 0 && (
                 <span className="badge rounded-pill bg-primary bg-opacity-25 text-white" style={{ fontSize: '0.68rem', padding: '2px 6px' }}>
                   {history.length}
@@ -378,6 +391,19 @@ export function Navbar({
             >
               Safety Tips
             </button>
+            <a
+              href="#trending-scams-radar"
+              className="text-start text-white-50 py-2 px-2 text-decoration-none fw-medium d-flex align-items-center gap-1"
+              onClick={(e) => {
+                e.preventDefault();
+                setMobileMenuOpen(false);
+                const el = document.getElementById('trending-scams-radar');
+                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }}
+            >
+              <Flame size={14} className="text-danger" />
+              <span>Trending Scams Radar</span>
+            </a>
             <button
               type="button"
               className="btn-nav-cta justify-content-center mt-2"

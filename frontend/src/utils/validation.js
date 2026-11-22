@@ -343,6 +343,15 @@ export function validateGoogleClientId(clientId) {
     };
   }
 
+  if (clean.includes('@')) {
+    return {
+      isValid: false,
+      isEmailAddress: true,
+      email: clean,
+      error: `Yeh aapka Email Address hai (${clean})! Google OAuth Client ID email nahi hota. Is email se login/signup karne ke liye neeche diye gaye Email form ka use karein.`
+    };
+  }
+
   if (!clean.endsWith('.apps.googleusercontent.com')) {
     return {
       isValid: false,

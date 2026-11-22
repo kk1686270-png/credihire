@@ -201,6 +201,15 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
 
     const validation = validateGoogleClientId(customClientId);
     if (!validation.isValid) {
+      if (validation.isEmailAddress) {
+        setEmail(validation.email);
+        setShowGoogleSetup(false);
+        setError(null);
+        if (showToast) {
+          showToast(`Email ${validation.email} selected. Enter password below to proceed.`, 'info');
+        }
+        return;
+      }
       setError(validation.error);
       return;
     }
@@ -404,6 +413,26 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
                         required
                       />
                     </div>
+
+                    {customClientId.includes('@') && !customClientId.endsWith('.apps.googleusercontent.com') && (
+                      <div className="p-2 rounded" style={{ background: 'rgba(234, 179, 8, 0.12)', border: '1px solid rgba(234, 179, 8, 0.35)' }}>
+                        <p className="small mb-1 text-warning fw-semibold" style={{ fontSize: '0.78rem' }}>
+                          💡 Yeh aapka Email Address hai ({customClientId.trim()}).
+                        </p>
+                        <button
+                          type="button"
+                          className="btn btn-warning btn-sm py-1 px-2 fw-semibold text-dark w-100"
+                          style={{ fontSize: '0.75rem' }}
+                          onClick={() => {
+                            setEmail(customClientId.trim());
+                            setShowGoogleSetup(false);
+                            setError(null);
+                          }}
+                        >
+                          👉 Is Email Se Sign In / Sign Up Karein
+                        </button>
+                      </div>
+                    )}
 
                     <div className="d-flex gap-2 mt-1 flex-wrap">
                       <button

@@ -11,10 +11,9 @@ import {
   CheckCircle2, 
   AlertCircle,
   Loader2,
-  UserPlus
+  Key
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
-import { getSavedGoogleAccounts, saveGoogleAccount } from '../utils/googleAccounts.js';
 import { loadGoogleIdentityServices } from '../utils/googleIdentity.js';
 
 function GoogleIcon({ size = 18 }) {
@@ -39,12 +38,9 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
   const [loading, setLoading] = useState(false);
   const [pendingVerification, setPendingVerification] = useState(null);
   
-  // Google Account Chooser states
-  const [showGoogleChooser, setShowGoogleChooser] = useState(false);
-  const [googleAccounts, setGoogleAccounts] = useState([]);
-  const [isAddingNewAccount, setIsAddingNewAccount] = useState(false);
-  const [customGoogleEmail, setCustomGoogleEmail] = useState('');
-  const [customGoogleName, setCustomGoogleName] = useState('');
+  // Real Google OAuth Setup state
+  const [showGoogleSetup, setShowGoogleSetup] = useState(false);
+  const [customClientId, setCustomClientId] = useState('');
 
   const googleButtonRef = useRef(null);
   const googleHandlerRef = useRef(null);
@@ -62,10 +58,18 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
       resetForm();
       onClose();
     } catch (err) {
-      setError(err.message || 'Google sign-in failed. Please try again.');
+      setError(err.message || 'Google authentication failed. Please try again.');
     } finally {
       setLoading(false);
     }
+  };
+
+  const getEffectiveGoogleClientId = () => {
+    return (
+      import.meta.env.VITE_GOOGLE_CLIENT_ID ||
+      (typeof localStorage !== 'undefined' ? localStorage.getItem('credihire_google_client_id') : '') ||
+      ''
+    ).trim();
   };
 
   // Synchronize mode with initialMode whenever modal opens
@@ -76,19 +80,16 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
       setError(null);
       setPendingVerification(null);
       setShowPassword(false);
-      setShowGoogleChooser(false);
-      setIsAddingNewAccount(false);
-      setGoogleAccounts(getSavedGoogleAccounts());
+      setShowGoogleSetup(false);
     }
   }, [isOpen, initialMode]);
 
-  // Optionally load Google Identity Services if client ID is configured
+  // Load Google Identity Services if a Client ID is configured
   useEffect(() => {
     if (!isOpen || pendingVerification) return undefined;
     let active = true;
-    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    const clientId = getEffectiveGoogleClientId();
     if (!clientId) {
-      // Do not error out; fallback gracefully to Google Account Chooser
       return undefined;
     }
 
@@ -109,11 +110,11 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
         });
       })
       .catch((loadError) => {
-        console.warn("GIS load info:", loadError.message);
+        console.warn("Google Identity Services notice:", loadError.message);
       });
 
     return () => { active = false; };
-  }, [isOpen, pendingVerification]);
+  }, [isOpen, pendingVerification, mode]);
 
   if (!isOpen) return null;
 
@@ -123,10 +124,7 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
     setName('');
     setConfirmPassword('');
     setPendingVerification(null);
-    setShowGoogleChooser(false);
-    setIsAddingNewAccount(false);
-    setCustomGoogleEmail('');
-    setCustomGoogleName('');
+    setShowGoogleSetup(false);
     setError(null);
   };
 
@@ -135,48 +133,52 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
     onClose();
   };
 
-  const handleOpenGoogleChooser = () => {
+  const handleLaunchGoogleSignIn = async () => {
     setError(null);
-    setGoogleAccounts(getSavedGoogleAccounts());
-    setShowGoogleChooser(true);
-    setIsAddingNewAccount(false);
-  };
+    const clientId = getEffectiveGoogleClientId();
 
-  const handleSelectGoogleAccount = async (account) => {
-    setError(null);
-    setLoading(true);
+    if (!clientId) {
+      // Prompt user to provide their Google Cloud OAuth Client ID for live connection
+      setShowGoogleSetup(true);
+      return;
+    }
 
     try {
-      await loginWithGoogle({
-        email: account.email,
-        name: account.name || (mode === 'signup' ? name : 'Google User')
+      setLoading(true);
+      const google = await loadGoogleIdentityServices();
+      google.accounts.id.initialize({
+        client_id: clientId,
+        callback: (response) => googleHandlerRef.current?.(response.credential)
       });
-      saveGoogleAccount(account);
-      resetForm();
-      onClose();
+      google.accounts.id.prompt();
     } catch (err) {
-      setError(err.message || "Failed to authenticate with Google account.");
+      setError(err.message || 'Unable to open Google Sign-In. Check your connection.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleAddCustomGoogleAccount = async (e) => {
+  const handleSaveClientIdAndLaunch = async (e) => {
     e.preventDefault();
-    setError(null);
-    setLoading(true);
+    const cleanId = customClientId.trim();
+    if (!cleanId) {
+      setError('Please paste a valid Google OAuth Client ID.');
+      return;
+    }
 
     try {
-      const newAcc = {
-        email: customGoogleEmail,
-        name: customGoogleName || (mode === 'signup' ? name : 'Google User')
-      };
-      await loginWithGoogle(newAcc);
-      saveGoogleAccount(newAcc);
-      resetForm();
-      onClose();
+      localStorage.setItem('credihire_google_client_id', cleanId);
+      setShowGoogleSetup(false);
+      setLoading(true);
+
+      const google = await loadGoogleIdentityServices();
+      google.accounts.id.initialize({
+        client_id: cleanId,
+        callback: (response) => googleHandlerRef.current?.(response.credential)
+      });
+      google.accounts.id.prompt();
     } catch (err) {
-      setError(err.message || "Failed to authenticate with Google.");
+      setError(err.message || 'Failed to initialize Google Sign-In with provided Client ID.');
     } finally {
       setLoading(false);
     }
@@ -218,7 +220,7 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
     }
   };
 
-  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+  const effectiveClientId = getEffectiveGoogleClientId();
 
   return (
     <div className="modal-overlay" onClick={handleClose} role="dialog" aria-modal="true">
@@ -250,20 +252,20 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
           </button>
         </div>
 
-        {/* Auth Mode Tabs (only when not in Google Chooser) */}
-        {!showGoogleChooser && !pendingVerification && (
+        {/* Auth Mode Tabs */}
+        {!pendingVerification && (
           <div className="auth-tabs-row">
             <button
               type="button"
               className={`auth-tab-btn ${mode === 'signin' ? 'active' : ''}`}
-              onClick={() => { modeRef.current = 'signin'; setMode('signin'); setError(null); }}
+              onClick={() => { modeRef.current = 'signin'; setMode('signin'); setError(null); setShowGoogleSetup(false); }}
             >
               Sign In
             </button>
             <button
               type="button"
               className={`auth-tab-btn ${mode === 'signup' ? 'active' : ''}`}
-              onClick={() => { modeRef.current = 'signup'; setMode('signup'); setError(null); }}
+              onClick={() => { modeRef.current = 'signup'; setMode('signup'); setError(null); setShowGoogleSetup(false); }}
             >
               Create Account
             </button>
@@ -304,154 +306,67 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
                 Back to sign in
               </button>
             </div>
-          ) : showGoogleChooser ? (
-            /* Google Account Chooser: Shows user Google accounts */
-            <div className="google-chooser-card">
-              <div className="google-chooser-header">
-                <GoogleIcon size={30} />
-                <h3 className="google-chooser-title">Choose an account</h3>
-                <span className="google-chooser-subtitle">
-                  to continue to <strong className="text-white">CrediHire</strong>
-                </span>
-              </div>
-
-              {!isAddingNewAccount ? (
-                <>
-                  <div className="google-accounts-list">
-                    {googleAccounts.map((acc) => (
-                      <button
-                        key={acc.email}
-                        type="button"
-                        className="google-account-btn"
-                        onClick={() => handleSelectGoogleAccount(acc)}
-                        disabled={loading}
-                        id={`btn-google-account-${acc.email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '-')}`}
-                      >
-                        <div
-                          className="google-avatar-circle"
-                          style={{ background: acc.avatarColor || '#4285F4' }}
-                        >
-                          {(acc.name || 'G').charAt(0).toUpperCase()}
-                        </div>
-                        <div className="google-account-info">
-                          <span className="google-account-name">{acc.name}</span>
-                          <span className="google-account-email">{acc.email}</span>
-                        </div>
-                        <ArrowRight size={14} className="text-white-50" />
-                      </button>
-                    ))}
-                  </div>
-
-                  <button
-                    type="button"
-                    className="btn-add-google-account mb-2"
-                    onClick={() => {
-                      setIsAddingNewAccount(true);
-                      setError(null);
-                    }}
-                    id="btn-use-another-google-account"
-                  >
-                    <UserPlus size={16} />
-                    <span>Use another Google account</span>
-                  </button>
-                </>
-              ) : (
-                /* Add Another Google Account Form */
-                <form onSubmit={handleAddCustomGoogleAccount} className="d-flex flex-column gap-2 mb-2">
-                  <div>
-                    <label className="auth-label" htmlFor="custom-google-name">Full Name</label>
-                    <div className="auth-input-wrapper">
-                      <User size={16} className="auth-input-icon" />
-                      <input
-                        id="custom-google-name"
-                        type="text"
-                        className="auth-input-field"
-                        placeholder="e.g. Rahul Sharma"
-                        value={customGoogleName}
-                        onChange={(e) => setCustomGoogleName(e.target.value)}
-                        required
-                      />
+          ) : (
+            <>
+              {/* Google Setup Card if user clicked Google but Client ID is needed */}
+              {showGoogleSetup && (
+                <div className="p-3 mb-3 rounded" style={{ background: 'rgba(66, 133, 244, 0.08)', border: '1px solid rgba(66, 133, 244, 0.35)' }}>
+                  <div className="d-flex align-items-center justify-content-between mb-2">
+                    <div className="d-flex align-items-center gap-2">
+                      <GoogleIcon size={18} />
+                      <span className="text-white fw-bold" style={{ fontSize: '0.88rem' }}>Connect Google OAuth</span>
                     </div>
-                  </div>
-
-                  <div>
-                    <label className="auth-label" htmlFor="custom-google-email">Google Email Address</label>
-                    <div className="auth-input-wrapper">
-                      <Mail size={16} className="auth-input-icon" />
-                      <input
-                        id="custom-google-email"
-                        type="email"
-                        className="auth-input-field"
-                        placeholder="yourname@gmail.com"
-                        value={customGoogleEmail}
-                        onChange={(e) => setCustomGoogleEmail(e.target.value)}
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="d-flex gap-2 mt-2">
-                    <button
-                      type="submit"
-                      className="btn btn-primary flex-grow-1 d-flex align-items-center justify-content-center gap-2 py-2"
-                      style={{ fontSize: '0.86rem', fontWeight: 600, borderRadius: 'var(--radius-sm)' }}
-                      disabled={loading}
-                    >
-                      {loading ? (
-                        <>
-                          <Loader2 size={15} className="spinner-icon" />
-                          <span>Connecting...</span>
-                        </>
-                      ) : (
-                        <>
-                          <GoogleIcon size={16} />
-                          <span>Continue with Google</span>
-                        </>
-                      )}
-                    </button>
                     <button
                       type="button"
-                      className="btn btn-secondary px-3 py-2"
-                      style={{ fontSize: '0.86rem', borderRadius: 'var(--radius-sm)' }}
-                      onClick={() => setIsAddingNewAccount(false)}
+                      className="btn btn-sm btn-link text-white-50 p-0 text-decoration-none"
+                      onClick={() => setShowGoogleSetup(false)}
                     >
-                      Back
+                      Cancel
                     </button>
                   </div>
-                </form>
+                  <p className="text-white-50 mb-3" style={{ fontSize: '0.78rem' }}>
+                    To open Google's authentic sign-in popup directly from Google servers, please enter your Google OAuth Client ID:
+                  </p>
+                  <form onSubmit={handleSaveClientIdAndLaunch} className="d-flex flex-column gap-2">
+                    <div className="auth-input-wrapper">
+                      <Key size={15} className="auth-input-icon" />
+                      <input
+                        type="text"
+                        className="auth-input-field"
+                        placeholder="e.g. 123456789-abc.apps.googleusercontent.com"
+                        value={customClientId}
+                        onChange={(e) => setCustomClientId(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="d-flex gap-2 mt-1">
+                      <button
+                        type="submit"
+                        className="btn btn-primary btn-sm flex-grow-1 py-2 fw-semibold"
+                        disabled={loading}
+                      >
+                        {loading ? 'Connecting...' : 'Launch Google Sign-In'}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm px-3"
+                        onClick={() => setShowGoogleSetup(false)}
+                      >
+                        Back
+                      </button>
+                    </div>
+                  </form>
+                </div>
               )}
 
-              <div className="google-chooser-footer">
-                To continue, Google will share your name, email address, and profile picture with CrediHire.
-              </div>
-
-              <div className="text-center mt-3 pt-2 border-top border-secondary border-opacity-25">
-                <button
-                  type="button"
-                  className="btn btn-link text-white-50 p-0 text-decoration-none"
-                  style={{ fontSize: '0.8rem' }}
-                  onClick={() => {
-                    setShowGoogleChooser(false);
-                    setIsAddingNewAccount(false);
-                    setError(null);
-                  }}
-                  id="btn-back-to-standard-auth"
-                >
-                  ← Back to standard sign in
-                </button>
-              </div>
-            </div>
-          ) : (
-            /* Standard Sign In / Sign Up Form */
-            <>
-              {/* Google Button */}
-              {clientId ? (
-                <div className="google-signin-button" ref={googleButtonRef} id="btn-google-auth" />
+              {/* Real Google Sign In / Sign Up Button */}
+              {effectiveClientId ? (
+                <div className="google-signin-button d-flex justify-content-center mb-3" ref={googleButtonRef} id="btn-google-auth" />
               ) : (
                 <button
                   type="button"
                   className="btn-google-auth"
-                  onClick={handleOpenGoogleChooser}
+                  onClick={handleLaunchGoogleSignIn}
                   disabled={loading}
                   id="btn-google-auth"
                 >
@@ -467,6 +382,7 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
                 <div className="auth-divider-line" />
               </div>
 
+              {/* Standard Email & Password Form */}
               <form onSubmit={handleSubmit} className="d-flex flex-column gap-3">
                 {/* Name Field (Sign Up only) */}
                 {mode === 'signup' && (
@@ -581,7 +497,7 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
                       type="button"
                       className="btn btn-link text-primary p-0 text-decoration-none fw-semibold"
                       style={{ fontSize: '0.82rem' }}
-                      onClick={() => { modeRef.current = 'signup'; setMode('signup'); setError(null); }}
+                      onClick={() => { modeRef.current = 'signup'; setMode('signup'); setError(null); setShowGoogleSetup(false); }}
                     >
                       Create one free
                     </button>
@@ -593,7 +509,7 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
                       type="button"
                       className="btn btn-link text-primary p-0 text-decoration-none fw-semibold"
                       style={{ fontSize: '0.82rem' }}
-                      onClick={() => { modeRef.current = 'signin'; setMode('signin'); setError(null); }}
+                      onClick={() => { modeRef.current = 'signin'; setMode('signin'); setError(null); setShowGoogleSetup(false); }}
                     >
                       Sign in here
                     </button>

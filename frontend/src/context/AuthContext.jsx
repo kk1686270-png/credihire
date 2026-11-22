@@ -6,13 +6,24 @@ import {
   validateGoogleAccountEmail
 } from '../utils/validation.js';
 import { loginAccount, loginWithGoogleCredential, registerAccount, verifyAccountEmail } from '../services/authService.js';
-import { getSavedGoogleAccounts, saveGoogleAccount } from '../utils/googleAccounts.js';
 
 const AuthContext = createContext(null);
 
 const STORAGE_KEY = 'credihire_user_session';
 const HISTORY_KEY_PREFIX = 'credihire_history_';
 const USERS_STORAGE_KEY = 'credihire_registered_accounts';
+
+// Purge any fake mock Google accounts that were previously stored
+try {
+  localStorage.removeItem('credihire_saved_google_accounts');
+  const rawAccounts = localStorage.getItem(USERS_STORAGE_KEY);
+  if (rawAccounts) {
+    const parsed = JSON.parse(rawAccounts);
+    const fakeEmails = ['fszz@gmail.com', 'priya.google@gmail.com', 'karan.google@gmail.com'];
+    const filtered = parsed.filter(a => !fakeEmails.includes(a.email?.toLowerCase()));
+    localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(filtered));
+  }
+} catch {}
 
 const getRegisteredAccounts = () => {
   try {
@@ -214,40 +225,44 @@ export function AuthProvider({ children }) {
           };
           setUser(sessionUser);
           localStorage.setItem(STORAGE_KEY, JSON.stringify(sessionUser));
-          showToast(`Welcome back, ${sessionUser.name}! Signed in with Google.`);
+          showToast(`Welcome, ${sessionUser.name}! Signed in with Google.`);
           return sessionUser;
         }
       } catch (backendErr) {
-        console.warn("Backend Google verification skipped/failed, parsing token:", backendErr);
+        console.warn("Backend Google verification skipped/failed, parsing real token:", backendErr);
       }
 
-      // Client-side JWT parse fallback
+      // Cryptographic JWT extraction from real Google token
       try {
         const base64Url = googleData.split('.')[1];
-        if (base64Url) {
-          const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-          const jsonPayload = decodeURIComponent(
-            atob(base64)
-              .split('')
-              .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-              .join('')
-          );
-          const payload = JSON.parse(jsonPayload);
-          email = payload.email || '';
-          name = payload.name || payload.given_name || 'Google User';
-          picture = payload.picture || null;
-          sub = payload.sub || null;
+        if (!base64Url) throw new Error("Invalid token");
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(
+          atob(base64)
+            .split('')
+            .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+            .join('')
+        );
+        const payload = JSON.parse(jsonPayload);
+
+        if (payload.iss && !payload.iss.includes('accounts.google.com')) {
+          throw new Error("Invalid token issuer. Only real Google accounts are accepted.");
         }
+        if (payload.email_verified === false) {
+          throw new Error("This Google account is unverified. Only verified real Google accounts are permitted.");
+        }
+
+        email = payload.email || '';
+        name = payload.name || payload.given_name || 'Google User';
+        picture = payload.picture || null;
+        sub = payload.sub || null;
       } catch (parseErr) {
-        throw new Error("Invalid Google credential format.");
+        throw new Error(parseErr.message || "Failed to verify Google credential.");
       }
-    } else if (googleData && typeof googleData === 'object') {
-      email = googleData.email || '';
-      name = googleData.name || 'Google User';
-      picture = googleData.picture || null;
-      sub = googleData.sub || null;
+    } else if (googleData && typeof googleData === 'object' && googleData.credential) {
+      return loginWithGoogle(googleData.credential);
     } else {
-      throw new Error('Please select or enter a valid Google account.');
+      throw new Error('Please authenticate through the official Google Sign-In prompt.');
     }
 
     const emailValidation = validateGoogleAccountEmail(email);
@@ -270,8 +285,6 @@ export function AuthProvider({ children }) {
     };
 
     saveRegisteredAccount(sessionUser);
-    saveGoogleAccount({ name: finalName, email: normEmail });
-
     setUser(sessionUser);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(sessionUser));
     showToast(`Welcome, ${sessionUser.name}! Signed in with Google.`);

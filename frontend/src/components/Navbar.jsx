@@ -131,19 +131,6 @@ export function Navbar({
             <span>Trending Scams</span>
           </a>
 
-          <a
-            href="#osint-hub"
-            className="nav-link-item text-decoration-none d-inline-flex align-items-center gap-1"
-            onClick={(e) => {
-              e.preventDefault();
-              const el = document.getElementById('osint-hub');
-              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }}
-          >
-            <Shield size={14} className="text-info" />
-            <span>OSINT Tools</span>
-          </a>
-
           {/* Logged In Only: Safety Dashboard / History Tab */}
           {user && (
             <button
@@ -432,19 +419,6 @@ export function Navbar({
             >
               <Flame size={14} className="text-danger" />
               <span>Trending Scams Radar</span>
-            </a>
-            <a
-              href="#osint-hub"
-              className="text-start text-white-50 py-2 px-2 text-decoration-none fw-medium d-flex align-items-center gap-1"
-              onClick={(e) => {
-                e.preventDefault();
-                setMobileMenuOpen(false);
-                const el = document.getElementById('osint-hub');
-                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-              }}
-            >
-              <Shield size={14} className="text-info" />
-              <span>OSINT Investigation Tools</span>
             </a>
             <button
               type="button"

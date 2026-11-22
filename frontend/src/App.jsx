@@ -16,7 +16,6 @@ import { Sparkles, AlertTriangle } from 'lucide-react';
 import { Chatbot } from './components/Chatbot';
 import { ExtensionGuide } from './components/ExtensionGuide';
 import { TrendingScamsFeed } from './components/TrendingScamsFeed';
-import { OsintHub } from './components/OsintHub';
 
 function AppContent() {
   const [isRecoveryOpen, setIsRecoveryOpen] = useState(false);
@@ -330,11 +329,6 @@ function AppContent() {
 
         {/* Live Community Scam Radar & Trending Alerts */}
         <TrendingScamsFeed onTestScam={handleTestScamText} />
-
-        {/* Multi-Vector Cyber Forensics & OSINT Investigation Suite */}
-        <div className="container">
-          <OsintHub onPopulateAnalyzer={handleTestScamText} />
-        </div>
       </main>
 
       {/* Footer & Disclaimer */}

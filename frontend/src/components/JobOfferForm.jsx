@@ -11,10 +11,13 @@ import {
   FileCheck,
   Check,
   Globe,
-  Link2
+  Link2,
+  ShieldCheck
 } from 'lucide-react';
 import { PRESET_EXAMPLES, PRESET_URL_EXAMPLES } from '../data/demoAnalysis.js';
 import { MAX_INPUT_CHARS, MAX_URL_CHARS, validateUploadFile, shouldSubmitOnEnter } from '../utils/validation.js';
+import { scanPii, redactPii } from '../utils/piiRedactor.js';
+import { detectHomoglyphs } from '../utils/homoglyphDetector.js';
 
 export function JobOfferForm({
   inputMode = 'text',
@@ -47,6 +50,9 @@ export function JobOfferForm({
   const charCount = inputText ? inputText.length : 0;
   const maxChars = MAX_INPUT_CHARS;
 
+  const piiScan = scanPii(inputText);
+  const homoglyphScan = detectHomoglyphs(urlInput);
+
   const handleSubmit = (e) => {
     if (e && e.preventDefault) {
       e.preventDefault();
@@ -61,7 +67,12 @@ export function JobOfferForm({
       if (!attachedFile && (!inputText || inputText.trim().length === 0)) {
         return;
       }
-      onSubmit({ text: inputText, file: attachedFile });
+      let textToSend = inputText;
+      if (piiScan.hasPii) {
+        const piiResult = redactPii(inputText);
+        textToSend = piiResult.redactedText;
+      }
+      onSubmit({ text: textToSend, file: attachedFile, piiRedactedCount: piiScan.count });
     }
   };
 
@@ -336,6 +347,22 @@ export function JobOfferForm({
                     <Paperclip size={12} className="text-primary" />
                     <span>Upload Document</span>
                   </button>
+
+                  {piiScan.hasPii ? (
+                    <span
+                      className="badge bg-success bg-opacity-20 text-success border border-success border-opacity-30 d-inline-flex align-items-center gap-1"
+                      style={{ fontSize: '0.73rem', padding: '2px 8px' }}
+                      title="Zero-Knowledge Privacy: Aadhaar / PAN numbers will be automatically masked before analysis"
+                    >
+                      <ShieldCheck size={12} />
+                      Privacy Shield: {piiScan.count} {piiScan.types.join('/')} Auto-Masked
+                    </span>
+                  ) : (
+                    <span className="text-white-50 d-inline-flex align-items-center gap-1" style={{ fontSize: '0.73rem' }}>
+                      <ShieldCheck size={12} className="text-success" />
+                      <span>Zero-Knowledge Privacy Active</span>
+                    </span>
+                  )}
                 </div>
 
                 <span id="char-count" className="char-counter-inline">
@@ -400,10 +427,20 @@ export function JobOfferForm({
                       <span>Clear URL</span>
                     </button>
                   )}
-                  <span className="text-white-50" style={{ fontSize: '0.74rem' }}>
-                    <Link2 size={11} className="me-1" />
-                    Checks domain syntax, SSRF-safe redirects, and TLS certificates
-                  </span>
+                  {homoglyphScan.isHomoglyph ? (
+                    <span
+                      className="badge bg-danger bg-opacity-25 text-danger border border-danger border-opacity-30 d-inline-flex align-items-center gap-1"
+                      style={{ fontSize: '0.73rem', padding: '2px 8px' }}
+                    >
+                      <AlertCircle size={12} />
+                      {homoglyphScan.spoofedTarget ? `Homoglyph Deception: Spoofs ${homoglyphScan.spoofedTarget}` : `Visual Homoglyph: ${homoglyphScan.detectedCount} lookalike character(s)`}
+                    </span>
+                  ) : (
+                    <span className="text-white-50" style={{ fontSize: '0.74rem' }}>
+                      <Link2 size={11} className="me-1" />
+                      Unicode homoglyph &amp; SSRF verification active
+                    </span>
+                  )}
                 </div>
 
                 <span className="char-counter-inline">

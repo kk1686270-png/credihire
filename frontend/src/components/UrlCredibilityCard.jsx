@@ -181,6 +181,15 @@ export function UrlCredibilityCard({ result, isScoreHidden = false, onOpenAuth }
 
       {/* Detected Indicators */}
       <div className="mb-4">
+        {indicators.some(ind => ind.code && ind.code.includes('homograph')) && (
+          <div className="alert alert-danger py-2 px-3 mb-3 d-flex align-items-center gap-2 rounded-3" style={{ fontSize: '0.84rem' }}>
+            <AlertTriangle size={18} className="text-danger flex-shrink-0" />
+            <span>
+              <strong>CRITICAL VISUAL HOMOGLYPH ATTACK DETECTED:</strong> This domain utilizes foreign lookalike characters (Cyrillic/Greek/Punycode) to visually impersonate an official brand!
+            </span>
+          </div>
+        )}
+
         <h6 className="text-white fw-semibold mb-3 d-flex align-items-center gap-2">
           <ShieldAlert size={16} className="text-warning" />
           Detected Risk Indicators ({indicators.length})

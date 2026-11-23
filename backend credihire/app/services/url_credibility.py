@@ -22,6 +22,7 @@ from app.schemas.url import (
     UrlAnalysisResponse,
     UrlIndicator,
 )
+from app.services.homoglyph import analyze_homoglyphs
 
 logger = logging.getLogger("credihire.url_credibility")
 
@@ -238,18 +239,40 @@ class UrlCredibilityService:
                 )
             )
 
-        # 5. Non-ASCII characters in host
+        # 5. Non-ASCII and Unicode Homograph visual deception check
+        homo_res = analyze_homoglyphs(hostname)
+        if homo_res["is_homograph"]:
+            if homo_res["spoofed_target"]:
+                indicators.append(
+                    UrlIndicator(
+                        code="homograph_brand_spoofing",
+                        severity="critical",
+                        category="brand_impersonation",
+                        message=homo_res["verdict"],
+                    )
+                )
+            else:
+                indicators.append(
+                    UrlIndicator(
+                        code="homograph_visual_spoofing",
+                        severity="high",
+                        category="syntax",
+                        message=homo_res["verdict"],
+                    )
+                )
+
         try:
             hostname.encode("ascii")
         except UnicodeEncodeError:
-            indicators.append(
-                UrlIndicator(
-                    code="non_ascii_hostname",
-                    severity="high",
-                    category="syntax",
-                    message="The domain contains non-ASCII characters that can be used for homoglyph spoofing.",
+            if not any(ind.code.startswith("homograph_") for ind in indicators):
+                indicators.append(
+                    UrlIndicator(
+                        code="non_ascii_hostname",
+                        severity="high",
+                        category="syntax",
+                        message="The domain contains non-ASCII characters that can be used for homoglyph spoofing.",
+                    )
                 )
-            )
 
         # 6. Domain label & TLD analysis (if not an IP)
         if not is_raw_ip:
@@ -493,6 +516,8 @@ class UrlCredibilityService:
             recommendations.append("Verify the final destination domain carefully before proceeding.")
         if "punycode_domain" in codes:
             recommendations.append("Examine the address bar carefully; this URL may use lookalike characters to mimic a reputable service.")
+        if "homograph_brand_spoofing" in codes or "homograph_visual_spoofing" in codes:
+            recommendations.append("Beware of visual homoglyph spoofing! This domain uses lookalike characters to deceive candidates into believing it is an official corporate portal.")
 
         if level in ("high", "critical") and not recommendations:
             recommendations.append("High risk indicators detected. Cease communication and do not share sensitive information.")

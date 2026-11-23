@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
+from pydantic import BaseModel, Field
 
 from app.dependencies import (
     get_auth_service,
@@ -36,10 +37,20 @@ from app.schemas.url import UrlAnalysisRequest, UrlAnalysisResponse
 from app.services.auth import AuthService
 from app.services.chatbot import ChatbotService
 from app.services.evidence_pdf import EvidencePdfGenerator
+from app.services.homoglyph import analyze_homoglyphs
 from app.services.osint import OsintService
+from app.services.pii_redactor import redact_pii
 from app.services.scam_analysis import RuleEngineFailure, ScamAnalysisService
 from app.services.upload_extraction import MAX_UPLOAD_BYTES, UploadExtractionError, UploadTextExtractor
 from app.services.url_credibility import UrlCredibilityService
+
+
+class HomoglyphRequest(BaseModel):
+    domain_or_url: str = Field(..., min_length=1, max_length=2000)
+
+
+class PiiRedactRequest(BaseModel):
+    text: str = Field(..., max_length=50000)
 
 router = APIRouter(prefix="/api/v1")
 
@@ -188,3 +199,19 @@ async def generate_dossier_pdf(request: DossierPdfRequest, generator: EvidencePd
         )
     except Exception as exc:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Could not generate PDF dossier: {str(exc)}") from exc
+
+
+@router.post("/url/homoglyph", summary="Detect Unicode homoglyphs, lookalikes, and Punycode spoofing")
+async def detect_homoglyph_spoofing(request: HomoglyphRequest) -> dict:
+    try:
+        return analyze_homoglyphs(request.domain_or_url)
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Homoglyph analysis failed: {str(exc)}") from exc
+
+
+@router.post("/privacy/redact-pii", summary="Zero-Knowledge PII Redaction for Indian Aadhaar, PAN, and Bank details")
+async def redact_sensitive_pii(request: PiiRedactRequest) -> dict:
+    try:
+        return redact_pii(request.text)
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"PII redaction failed: {str(exc)}") from exc

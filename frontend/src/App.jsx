@@ -132,7 +132,9 @@ function AppContent() {
   const handleAnalyze = async (overrideData) => {
     const text = overrideData?.text !== undefined ? overrideData.text : inputText;
     const file = overrideData?.file !== undefined ? overrideData.file : attachedFile;
-    if (!user) {
+    if (overrideData?.piiRedactedCount > 0) {
+      showToast(`Zero-Knowledge Privacy: ${overrideData.piiRedactedCount} sensitive item(s) auto-masked`, "success");
+    } else if (!user) {
       showToast("Please signin/signup", "warning");
     }
     const scanData = await analyze(text, file);

@@ -6,12 +6,12 @@ import { generateLocalScamAdvice } from '../utils/localScamAdvisor.js';
 const WELCOME_MESSAGE = {
   id: 'welcome',
   role: 'assistant',
-  reply: 'Hi, I am Credihire AI Assistant. Ask about job-scam warning signs or discuss a suspicious message.'
+  reply: 'Hello! 👋 I am CrediHire AI Assistant. How can I help you today? You can ask me career questions, check suspicious job offers, or verify recruiter messages.'
 };
 const SUGGESTIONS = [
   'What are common job-scam warning signs?',
   'Should I pay a registration fee for a job?',
-  'How can I verify a recruiter?'
+  'How can I verify if a recruiter is genuine?'
 ];
 
 function AnalysisCard({ analysis }) {

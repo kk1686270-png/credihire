@@ -49,7 +49,8 @@ POPULAR_BRANDS = {
     "microsoft": ["microsoft.com", "careers.microsoft.com"],
     "apple": ["apple.com", "jobs.apple.com"],
     "netflix": ["netflix.com", "jobs.netflix.com"],
-    "meta": ["meta.com", "metacareers.com"],
+    "meta": ["meta.com", "metacareers.com", "facebook.com"],
+    "instagram": ["instagram.com"],
     "linkedin": ["linkedin.com"],
     "indeed": ["indeed.com", "indeed.co.in"],
     "glassdoor": ["glassdoor.com", "glassdoor.co.in"],
@@ -358,11 +359,11 @@ class UrlCredibilityService:
                         return SslCertificateInfo(is_valid=False, error="No peer certificate presented.")
 
                     # Extract Subject and Issuer
-                    subject_parts = [dict(x)[0][1] for x in cert.get("subject", ()) if x]
-                    issuer_parts = [dict(x)[0][1] for x in cert.get("issuer", ()) if x]
+                    subject_dict = {key: val for rdn in cert.get("subject", ()) for key, val in rdn}
+                    issuer_dict = {key: val for rdn in cert.get("issuer", ()) for key, val in rdn}
 
-                    subject_str = ", ".join(str(s) for s in subject_parts[:2]) if subject_parts else hostname
-                    issuer_str = ", ".join(str(i) for i in issuer_parts[:2]) if issuer_parts else None
+                    subject_str = subject_dict.get("commonName") or subject_dict.get("organizationName") or hostname
+                    issuer_str = issuer_dict.get("organizationName") or issuer_dict.get("commonName") or "Trusted Certificate Authority"
 
                     # Check expiration
                     expires_str = cert.get("notAfter")

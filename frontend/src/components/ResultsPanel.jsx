@@ -142,7 +142,7 @@ ${result.recommendations?.map(r => `${r.step || ''}. ${r.title}: ${r.description
         {result.isUrlAnalysis ? (
           <UrlCredibilityCard 
             result={result} 
-            isScoreHidden={isScoreHidden} 
+            isScoreHidden={false} 
             onOpenAuth={onOpenAuth} 
           />
         ) : (

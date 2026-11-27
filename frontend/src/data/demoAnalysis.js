@@ -133,25 +133,25 @@ export const PRESET_EXAMPLES = [
 export const PRESET_URL_EXAMPLES = [
   {
     id: "google-careers",
-    label: "Google Careers (Verified Brand)",
+    label: "Google Careers (Verified)",
     type: "safe",
     url: "https://careers.google.com"
   },
   {
     id: "brand-spoof",
-    label: "Amazon Spoof Portal (.xyz)",
+    label: "Amazon Spoof (.xyz)",
     type: "high",
     url: "https://amazon-recruitment-portal.xyz/apply"
   },
   {
     id: "url-shortener",
-    label: "Shortened Portal Link (bit.ly)",
+    label: "Shortened Link (bit.ly)",
     type: "medium",
     url: "https://bit.ly/recruitment-offer-39x"
   },
   {
     id: "insecure-http",
-    label: "Unencrypted HTTP Site",
+    label: "Insecure HTTP (Site)",
     type: "medium",
     url: "http://recruitment-hiring-desk.net"
   }
